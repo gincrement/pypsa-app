@@ -31,7 +31,7 @@ def get_redis_stats(user: User = Depends(get_current_user)):
         all_keys = list(cache_service.redis_client.scan_iter(match="*"))
         stats["total_keys"] = len(all_keys)
 
-        # Group by type (plot:*, map_buses:*, map_lines:*)
+        # Group by type (plot:*, etc.)
         for key in all_keys:
             key_type = key.split(":")[0]
             stats["keys_by_type"][key_type] = stats["keys_by_type"].get(key_type, 0) + 1
@@ -55,13 +55,6 @@ def clear_plot_cache(user: User = Depends(get_current_user)):
     """Clear all plot caches"""
     deleted_count = cache_service.clear_plot_cache()
     return {"message": "Cleared all plot caches", "deleted_keys": deleted_count}
-
-
-@router.delete("/redis/maps", response_model=ClearCacheResponse)
-def clear_map_cache(user: User = Depends(get_current_user)):
-    """Clear all map caches"""
-    deleted_count = cache_service.clear_map_cache()
-    return {"message": "Cleared all map caches", "deleted_keys": deleted_count}
 
 
 @router.delete("/redis/{network_id}", response_model=ClearCacheResponse)

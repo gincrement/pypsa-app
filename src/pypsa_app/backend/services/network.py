@@ -293,8 +293,6 @@ def _process_network_file(
         Tuple of (was_added, was_updated, error_message)
     """
     try:
-        from pypsa_app.backend.services.map import generate_topology_svg
-
         service = NetworkService(file_path, use_cache=False)
         file_hash = service.calculate_file_hash()
         file_size = service.get_file_size()
@@ -302,9 +300,8 @@ def _process_network_file(
         if existing:
             # Update existing network
             needs_update = existing.file_hash != file_hash
-            needs_svg = existing.topology_svg is None
 
-            if not (needs_update or needs_svg):
+            if not needs_update:
                 del service
                 return False, False, None
 
@@ -323,9 +320,6 @@ def _process_network_file(
                     existing.update_history = []
                 existing.update_history.append(update_time)
 
-            if needs_svg:
-                existing.topology_svg = generate_topology_svg(service.n)
-
             del service
             gc.collect()
             db.commit()
@@ -335,7 +329,6 @@ def _process_network_file(
         else:
             # Add new network
             info = service.extract_database_info()
-            topology_svg = generate_topology_svg(service.n)
             creation_time = datetime.utcnow().isoformat()
 
             network = Network(
@@ -348,7 +341,6 @@ def _process_network_file(
                 dimensions_count=info["dimensions_count"],
                 meta=info["meta"],
                 facets=info["facets"],
-                topology_svg=topology_svg,
                 update_history=[creation_time],
             )
             db.add(network)

@@ -7,7 +7,6 @@ from typing import Any, Callable, Dict
 from pypsa_app.backend.cache import cache
 from pypsa_app.backend.task_queue import task_app
 from pypsa_app.backend.schemas.task import TaskResultResponse
-from pypsa_app.backend.services.map import extract_geographic_layer
 from pypsa_app.backend.services.network import scan_networks
 from pypsa_app.backend.services.statistics import get_plot as get_plot_service
 from pypsa_app.backend.services.statistics import (
@@ -58,13 +57,6 @@ def get_plot_task(self, **kwargs):
     """Background task for plot generation"""
     func = cache("plot", ttl=settings.plot_cache_ttl)(get_plot_service)
     return _execute_task(self, "Plot generation", func, **kwargs)
-
-
-@task_app.task(bind=True, name="tasks.extract_geographic_layer")
-def extract_geographic_layer_task(self, **kwargs):
-    """Background task for geographic layer extraction"""
-    func = cache("map_data", ttl=settings.map_cache_ttl)(extract_geographic_layer)
-    return _execute_task(self, "Geographic layer extraction", func, **kwargs)
 
 
 @task_app.task(bind=True, name="tasks.scan_networks")

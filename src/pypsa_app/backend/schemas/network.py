@@ -28,7 +28,6 @@ class NetworkResponse(BaseModel):
     components_count: dict[str, Any] | None = None
     meta: dict[str, Any] | None = None
     facets: dict[str, Any] | None = None
-    topology_svg: str | None = None
 
     # Ownership and visibility
     visibility: NetworkVisibility = NetworkVisibility.PRIVATE

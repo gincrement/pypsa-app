@@ -13,7 +13,6 @@ from pypsa_app.backend.api.routes import (
     admin,
     auth,
     cache,
-    map,
     networks,
     plots,
     statistics,
@@ -230,7 +229,6 @@ app.include_router(
 )
 app.include_router(cache.router, prefix=f"{API_V1_PREFIX}/cache", tags=["cache"])
 app.include_router(version.router, prefix=f"{API_V1_PREFIX}/version", tags=["version"])
-app.include_router(map.router, prefix=f"{API_V1_PREFIX}/map", tags=["map"])
 app.include_router(tasks.router, prefix=f"{API_V1_PREFIX}/tasks", tags=["tasks"])
 
 
@@ -274,29 +272,7 @@ if not settings.backend_only:
 
     static_dir = Path(__file__).parent / "static"
 
-    # Mount map app at /map (must be before catch-all SPA routing)
-    map_dir = static_dir / "map"
-    if map_dir.exists():
-        app.mount("/map", StaticFiles(directory=map_dir, html=True), name="map")
-        logger.info(
-            "Serving map app",
-            extra={
-                "app_type": "map",
-                "directory": str(map_dir),
-                "mount_path": "/map",
-            },
-        )
-    else:
-        logger.warning(
-            "Map app not found",
-            extra={
-                "app_type": "map",
-                "expected_directory": str(map_dir),
-                "build_command": "cd frontend/map && npm run build",
-            },
-        )
-
-    # Mount main app LAST (catch-all for SPA routing)
+    # Mount main app (catch-all for SPA routing)
     app_dir = static_dir / "app"
     if app_dir.exists():
         app.mount("/", SPAStaticFiles(directory=app_dir, html=True), name="app")

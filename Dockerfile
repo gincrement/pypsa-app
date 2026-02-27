@@ -74,28 +74,10 @@ RUN npm ci && \
     npm cache clean --force
 
 
-# Stage 4: Build map page with Kepler.gl and React (/network/map)
-FROM node:22-alpine AS map-builder
-
-WORKDIR /map
-
-# Use Docker-compatible build paths
-ENV DOCKER_BUILD=true
-
-COPY frontend/map/package*.json ./
-COPY frontend/map/ ./
-
-RUN npm ci && \
-    npm run build && \
-    npm cache clean --force
-
-
-# Stage 5: Full stack (adds built frontends to backend base)
+# Stage 4: Full stack (adds built frontend to backend base)
 FROM backend AS full
 
 COPY --from=app-builder /frontend/build/ src/pypsa_app/backend/static/app/
-COPY --from=map-builder /map/dist/ src/pypsa_app/backend/static/map/
 
-# Copy package.json files for version detection
+# Copy package.json for version detection
 COPY --from=app-builder /frontend/package.json frontend/app/package.json
-COPY --from=map-builder /map/package.json frontend/map/package.json

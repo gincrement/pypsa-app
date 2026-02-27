@@ -56,7 +56,6 @@ services:
       - ../src:/app/src
       - ../data:/data
       - ../frontend/app/package.json:/app/frontend/app/package.json:ro
-      - ../frontend/map/package.json:/app/frontend/map/package.json:ro
     depends_on:
       postgres:
         condition: service_healthy

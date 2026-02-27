@@ -127,32 +127,9 @@ class CacheService:
             )
         return deleted
 
-    def clear_map_cache(self) -> int:
-        """Clear all map caches"""
-        deleted = 0
-        for key in self.redis_client.scan_iter(match="map_*:*"):
-            self.redis_client.delete(key)
-            deleted += 1
-        if deleted > 0:
-            logger.info(
-                "Cleared map cache entries",
-                extra={
-                    "deleted_count": deleted,
-                    "cache_type": "map",
-                    "pattern": "map_*:*",
-                },
-            )
-        return deleted
-
     def clear_network_cache(self, network_id: str) -> int:
-        """Clear all cached data for a specific network (map caches + all plots)"""
+        """Clear all cached data for a specific network"""
         deleted = 0
-
-        # Clear map-specific caches for this network
-        map_pattern = f"map_*:{network_id}"
-        for key in self.redis_client.scan_iter(match=map_pattern):
-            self.redis_client.delete(key)
-            deleted += 1
 
         # Clear all plot caches (plots can involve multiple networks)
         plot_pattern = "plot:*"
@@ -166,7 +143,6 @@ class CacheService:
                 extra={
                     "network_id": network_id,
                     "deleted_count": deleted,
-                    "map_pattern": map_pattern,
                     "plot_pattern": plot_pattern,
                 },
             )
@@ -212,9 +188,6 @@ class DummyCacheService:
         return False
 
     def clear_plot_cache(self):
-        return 0
-
-    def clear_map_cache(self):
         return 0
 
     def clear_network_cache(self, *args, **kwargs):

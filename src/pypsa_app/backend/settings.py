@@ -79,13 +79,6 @@ class Settings(BaseSettings):
         json_schema_extra={"category": "Authentication", "depends_on": "enable_auth"},
     )
 
-    # Map
-    mapbox_token: str | None = Field(
-        default=None,
-        description="Mapbox access token for interactive network map via kepler.gl",
-        json_schema_extra={"category": "Map"},
-    )
-
     # Caching
     redis_url: str | None = Field(
         default=None,
@@ -95,11 +88,6 @@ class Settings(BaseSettings):
     plot_cache_ttl: int = Field(
         default=86400,
         description="Time-to-live in seconds for plot cache entries",
-        json_schema_extra={"category": "Redis", "depends_on": "redis_url"},
-    )
-    map_cache_ttl: int = Field(
-        default=3600,
-        description="Time-to-live in seconds for map cache entries",
         json_schema_extra={"category": "Redis", "depends_on": "redis_url"},
     )
     network_cache_ttl: int = Field(

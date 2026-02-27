@@ -1,5 +1,4 @@
 import { renderComponent } from '$lib/components/ui/data-table/render-helpers.js';
-import TopologyCell from '../cells/topology-cell.svelte';
 import FileCell from '../cells/file-cell.svelte';
 import DimensionsCell from '../cells/dimensions-cell.svelte';
 import ComponentsCell from '../cells/components-cell.svelte';
@@ -27,15 +26,6 @@ export const createColumns = (helpers) => {
 	} = helpers;
 
 	return [
-		{
-			accessorKey: 'topology_svg',
-			header: 'Topology',
-			enableSorting: false,
-			cell: (info) => {
-				const network = info.row.original;
-				return renderComponent(TopologyCell, { network });
-			}
-		},
 		{
 			accessorKey: 'filename',
 			header: 'File',

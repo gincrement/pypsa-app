@@ -23,7 +23,7 @@ dependencies = [
     "pydantic",
     "pydantic-settings",
     "sqlalchemy",
-    "pypsa @ git+https://github.com/lkstrp/PyPSA.git@explore-refactor",
+    "pypsa>1.1",
     "click",
     "authlib",
     "itsdangerous",
