@@ -2,9 +2,9 @@
 	import * as Avatar from '$lib/components/ui/avatar';
 	import * as Tooltip from '$lib/components/ui/tooltip';
 
-	let { network } = $props();
+	let { item } = $props();
 
-	const owner = $derived(network.owner);
+	const owner = $derived(item.owner);
 </script>
 
 {#if owner}

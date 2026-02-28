@@ -6,19 +6,33 @@ export function cn(...inputs) {
 }
 
 export function formatFileSize(bytes) {
-	if (!bytes) return 'N/A';
+	if (!bytes) return '—';
 	const mb = bytes / (1024 * 1024);
 	return `${mb.toFixed(2)} MB`;
 }
 
 export function formatDate(dateString) {
-	if (!dateString) return 'N/A';
+	if (!dateString) return '—';
 	const date = new Date(dateString);
 	return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
 }
 
+export function formatDuration(startedAt, completedAt) {
+	if (!startedAt) return null;
+	const start = new Date(startedAt);
+	const end = completedAt ? new Date(completedAt) : new Date();
+	const seconds = Math.floor((end - start) / 1000);
+	if (seconds < 60) return `${seconds}s`;
+	const minutes = Math.floor(seconds / 60);
+	const secs = seconds % 60;
+	if (minutes < 60) return `${minutes}m ${secs}s`;
+	const hours = Math.floor(minutes / 60);
+	const mins = minutes % 60;
+	return `${hours}h ${mins}m`;
+}
+
 export function formatRelativeTime(dateString) {
-	if (!dateString) return 'N/A';
+	if (!dateString) return '—';
 	const date = new Date(dateString);
 	const now = new Date();
 	const diffInSeconds = Math.floor((now - date) / 1000);

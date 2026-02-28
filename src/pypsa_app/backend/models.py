@@ -11,6 +11,7 @@ from sqlalchemy import (
     Column,
     Enum,
     ForeignKey,
+    Integer,
     String,
     Text,
     TypeDecorator,
@@ -74,6 +75,11 @@ class Permission(str, enum.Enum):
     NETWORKS_UPDATE = "networks:update"
     NETWORKS_DELETE = "networks:delete"
     NETWORKS_VIEW_ALL = "networks:view_all"
+
+    # Run permissions
+    RUNS_VIEW = "runs:view"
+    RUNS_CREATE = "runs:create"
+    RUNS_MODIFY = "runs:modify"
 
     # User management permissions
     USERS_VIEW = "users:view"
@@ -189,3 +195,51 @@ class Network(Base):
     def tags(self) -> list | None:
         tags = self.meta.get("tags") if self.meta else None
         return tags if isinstance(tags, list) else None
+
+
+class RunStatus(str, enum.Enum):
+    """Run status, mirrors smk-executor's JobStatus."""
+
+    PENDING = "PENDING"
+    SETUP = "SETUP"
+    RUNNING = "RUNNING"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    CANCELLED = "CANCELLED"
+
+
+class Run(Base):
+    """Persists run metadata for statistics.
+
+    Job metadata is synced from smk-executor on every status poll
+    and survives after smk-executor garbage collects the job.
+    """
+
+    __tablename__ = "runs"
+
+    job_id = Column(UuidType(), primary_key=True)
+    user_id = Column(
+        UuidType(),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    owner = relationship("User", foreign_keys=[user_id])
+    created_at = Column(TIMESTAMP, server_default=func.now())
+
+    # Job creation inputs (set once at creation, never synced)
+    workflow = Column(Text, nullable=True)
+    configfile = Column(String(512), nullable=True)
+    snakemake_args = Column(JSON, nullable=True)
+
+    # Job metadata (synced from smk-executor)
+    git_ref = Column(String(255), nullable=True)
+    git_sha = Column(String(40), nullable=True)
+    status = Column(
+        str_enum(RunStatus, "run_status"),
+        default=RunStatus.PENDING,
+        nullable=False,
+    )
+    exit_code = Column(Integer, nullable=True)
+    started_at = Column(TIMESTAMP, nullable=True)
+    completed_at = Column(TIMESTAMP, nullable=True)

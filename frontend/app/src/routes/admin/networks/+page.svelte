@@ -1,6 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
 	import { admin } from '$lib/api/client.js';
+	import { formatFileSize, formatDate } from '$lib/utils.js';
 	import { Globe, Lock, Server, Settings, Loader2 } from 'lucide-svelte';
 	import Button from '$lib/components/ui/button/button.svelte';
 	import * as Table from '$lib/components/ui/table';
@@ -128,17 +129,6 @@
 		} finally {
 			deleting = false;
 		}
-	}
-
-	function formatFileSize(bytes) {
-		if (!bytes) return '-';
-		const mb = bytes / (1024 * 1024);
-		return `${mb.toFixed(2)} MB`;
-	}
-
-	function formatDate(dateString) {
-		if (!dateString) return '-';
-		return new Date(dateString).toLocaleDateString();
 	}
 
 	function getVisibilityBadge(visibility, hasOwner) {

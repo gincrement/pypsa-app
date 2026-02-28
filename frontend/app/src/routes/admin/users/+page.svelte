@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { authStore } from '$lib/stores/auth.svelte.js';
 	import { admin } from '$lib/api/client.js';
+	import { formatDate } from '$lib/utils.js';
 	import { Check, Clock, User, Shield, Settings } from 'lucide-svelte';
 	import Button from '$lib/components/ui/button/button.svelte';
 	import * as Table from '$lib/components/ui/table';
@@ -99,10 +100,6 @@
 		return 'outline';
 	}
 
-	function formatDate(dateString) {
-		if (!dateString) return '-';
-		return new Date(dateString).toLocaleDateString();
-	}
 </script>
 
 <svelte:head>

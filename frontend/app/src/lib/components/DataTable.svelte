@@ -4,7 +4,17 @@
 	import FlexRender from '$lib/components/ui/data-table/flex-render.svelte';
 	import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-svelte';
 
-	let { data, columns, totalItems, pageSize, sorting = $bindable([]), columnVisibility = $bindable({}), globalFilter = $bindable(''), onRowClick } = $props();
+	let {
+		data,
+		columns,
+		totalItems,
+		pageSize,
+		sorting = $bindable([]),
+		columnVisibility = $bindable({}),
+		globalFilter = $bindable(''),
+		globalFilterFn,
+		onRowClick
+	} = $props();
 
 	const table = createTable({
 		get data() {
@@ -40,33 +50,7 @@
 		onGlobalFilterChange: (updater) => {
 			globalFilter = typeof updater === 'function' ? updater(globalFilter) : updater;
 		},
-		globalFilterFn: (row, columnId, filterValue) => {
-			const searchStr = filterValue.toLowerCase();
-			const network = row.original;
-
-			// Search in filename
-			if (network.filename?.toLowerCase().includes(searchStr)) return true;
-
-			// Search in network name
-			if (network.name?.toLowerCase().includes(searchStr)) return true;
-
-			// Search in file path
-			if (network.file_path?.toLowerCase().includes(searchStr)) return true;
-
-			// Search in tags
-			if (network.tags && Array.isArray(network.tags)) {
-				return network.tags.some((tag) => {
-					if (typeof tag === 'string') {
-						return tag.toLowerCase().includes(searchStr);
-					} else if (typeof tag === 'object' && tag.name) {
-						return tag.name.toLowerCase().includes(searchStr);
-					}
-					return false;
-				});
-			}
-
-			return false;
-		}
+		globalFilterFn: globalFilterFn ?? (() => true)
 	});
 </script>
 

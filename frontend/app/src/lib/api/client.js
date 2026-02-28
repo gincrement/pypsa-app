@@ -224,6 +224,26 @@ export const plots = {
 
 };
 
+// Runs API
+export const runs = {
+	async list(skip = 0, limit = 100) {
+		const params = new URLSearchParams({ skip, limit });
+		return request(`/runs/?${params}`);
+	},
+	async get(id) {
+		return request(`/runs/${id}`, {}, `run-${id}`);
+	},
+	async cancel(id) {
+		return request(`/runs/${id}/cancel`, { method: 'POST' });
+	},
+	async remove(id) {
+		return request(`/runs/${id}`, { method: 'DELETE' });
+	},
+	logsUrl(id) {
+		return `${API_BASE}/runs/${id}/logs`;
+	}
+};
+
 // Cache API
 export const cache = {
 	async clearNetwork(networkId) {

@@ -4,9 +4,10 @@ import DimensionsCell from '../cells/dimensions-cell.svelte';
 import ComponentsCell from '../cells/components-cell.svelte';
 import TagsCell from '../cells/tags-cell.svelte';
 import UpdateHistoryCell from '../cells/update-history-cell.svelte';
-import ActionsCell from '../cells/actions-cell.svelte';
-import VisibilityCell from '../cells/visibility-cell.svelte';
-import OwnerCell from '../cells/owner-cell.svelte';
+import ActionsCell from '$lib/components/cells/ActionsCell.svelte';
+import VisibilityCell from '$lib/components/cells/VisibilityCell.svelte';
+import { Lock, Globe, Trash2 } from 'lucide-svelte';
+import OwnerCell from '$lib/components/OwnerCell.svelte';
 
 export const createColumns = (helpers) => {
 	const {
@@ -117,7 +118,7 @@ export const createColumns = (helpers) => {
 						enableSorting: false,
 						cell: (info) => {
 							const network = info.row.original;
-							return renderComponent(OwnerCell, { network });
+							return renderComponent(OwnerCell, { item: network });
 						}
 					}
 				]
@@ -161,16 +162,28 @@ export const createColumns = (helpers) => {
 			cell: (info) => {
 				const network = info.row.original;
 				const canEdit = canEditVisibility(network);
+				const isPublic = network.visibility === 'public';
 				const isDeleting = getDeletingId() === network.id;
 				const isUpdatingVisibility = getUpdatingVisibilityId() === network.id;
-				return renderComponent(ActionsCell, {
-					network,
-					handleDelete,
-					handleVisibilityToggle,
-					canEdit,
-					isDeleting,
-					isUpdatingVisibility
-				});
+				const actions = [];
+				if (canEdit) {
+					actions.push({
+						icon: isPublic ? Lock : Globe,
+						label: isPublic ? 'Make private' : 'Make public',
+						onclick: () => handleVisibilityToggle(network.id, isPublic ? 'private' : 'public'),
+						loading: isUpdatingVisibility,
+						loadingLabel: 'Updating...'
+					});
+					actions.push({
+						icon: Trash2,
+						label: 'Delete',
+						onclick: () => handleDelete(network.id),
+						loading: isDeleting,
+						loadingLabel: 'Deleting...',
+						variant: 'destructive'
+					});
+				}
+				return renderComponent(ActionsCell, { actions });
 			}
 		}
 	];

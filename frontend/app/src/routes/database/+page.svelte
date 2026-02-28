@@ -6,17 +6,17 @@
 	import { networks } from '$lib/api/client.js';
 	import { formatFileSize, formatDate, getDirectoryPath, getTagType, getTagColor } from '$lib/utils.js';
 	import Pagination from '$lib/components/Pagination.svelte';
-	import { CircleAlert } from 'lucide-svelte';
+	import { CircleAlert, Network, FolderOpen } from 'lucide-svelte';
 	import * as Alert from '$lib/components/ui/alert';
-	import DataTable from './components/data-table.svelte';
+	import DataTable from '$lib/components/DataTable.svelte';
 	import { createColumns } from './components/columns.js';
 	import { authStore } from '$lib/stores/auth.svelte.js';
+	import EmptyState from '$lib/components/EmptyState.svelte';
+	import TableSkeleton from '$lib/components/TableSkeleton.svelte';
 
 	// Components
 	import ActionsBar from './components/ActionsBar.svelte';
 	import FilterBar from './components/FilterBar.svelte';
-	import EmptyState from './components/EmptyState.svelte';
-	import TableSkeleton from './components/TableSkeleton.svelte';
 
 	// Data state
 	let networksList = $state([]);
@@ -77,6 +77,22 @@
 		});
 	});
 
+	function networkFilterFn(row, columnId, filterValue) {
+		const searchStr = filterValue.toLowerCase();
+		const network = row.original;
+		if (network.filename?.toLowerCase().includes(searchStr)) return true;
+		if (network.name?.toLowerCase().includes(searchStr)) return true;
+		if (network.file_path?.toLowerCase().includes(searchStr)) return true;
+		if (network.tags && Array.isArray(network.tags)) {
+			return network.tags.some((tag) => {
+				if (typeof tag === 'string') return tag.toLowerCase().includes(searchStr);
+				if (typeof tag === 'object' && tag.name) return tag.name.toLowerCase().includes(searchStr);
+				return false;
+			});
+		}
+		return false;
+	}
+
 	onMount(async () => {
 		if (browser) {
 			const savedPageSize = localStorage.getItem('networksPageSize');
@@ -92,7 +108,7 @@
 		}
 		if (urlSize) {
 			const parsed = parseInt(urlSize);
-			if (!isNaN(parsed) && [1, 10, 25, 50, 100].includes(parsed)) pageSize = parsed;
+			if (!isNaN(parsed) && [10, 25, 50, 100].includes(parsed)) pageSize = parsed;
 		}
 
 		await loadNetworks();
@@ -239,7 +255,7 @@
 </script>
 
 <div class="min-h-screen">
-	<div style="max-width: 80rem; margin: 0 auto; padding-top: 2rem; padding-bottom: 2rem;">
+	<div class="max-w-[80rem] mx-auto py-8">
 		<!-- Actions Bar (Scan + Upload) -->
 		<ActionsBar {scanning} onScan={handleScan} />
 
@@ -266,9 +282,9 @@
 		{#if viewState === 'loading'}
 			<TableSkeleton rows={pageSize > 10 ? 10 : pageSize} />
 		{:else if viewState === 'empty'}
-			<EmptyState type="empty" />
+			<EmptyState icon={Network} title="No Networks" description="Get started by uploading or scanning for networks." />
 		{:else if viewState === 'no-matches'}
-			<EmptyState type="no-matches" />
+			<EmptyState icon={FolderOpen} title="No Results" description="No networks match your current filters." />
 		{:else}
 			<DataTable
 				data={networksList}
@@ -278,6 +294,7 @@
 				bind:sorting
 				bind:columnVisibility
 				globalFilter={filters.search}
+				globalFilterFn={networkFilterFn}
 				onRowClick={(network) => viewNetwork(network.id)}
 			/>
 

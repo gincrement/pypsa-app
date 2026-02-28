@@ -6,7 +6,6 @@
 	import { authStore } from '$lib/stores/auth.svelte.js';
 	import { filtersPanelCollapsed } from '$lib/stores/networkPageStore';
 	import AppSidebar from '$lib/components/AppSidebar.svelte';
-	import AppSidebarRight from '$lib/components/AppSidebarRight.svelte';
 	import DarkModeToggle from '$lib/components/DarkModeToggle.svelte';
 	import Button from '$lib/components/ui/button/button.svelte';
 	import { ModeWatcher } from 'mode-watcher';
@@ -22,6 +21,8 @@
 		if (path === '/') return 'Home';
 		if (path === '/database') return 'Database';
 		if (path === '/network' || path.startsWith('/network/')) return 'Network';
+		if (path === '/runs' || path.startsWith('/runs/')) return 'Runs';
+		if (path.startsWith('/admin')) return 'Admin';
 		if (path === '/login') return 'Login';
 		return 'Page';
 	});
@@ -33,10 +34,6 @@
 	const showSidebar = $derived(
 		$page.url.pathname !== '/login' && $page.url.pathname !== '/pending-approval'
 	);
-
-	// Determine if we should show the right sidebar (only on network page)
-	// Disabled - will move filters into main content area instead
-	const showRightSidebar = $derived(false);
 
 	// Determine if we should show the filters toggle button (only on network page)
 	const showFiltersToggle = $derived($page.url.pathname.startsWith('/network'));
@@ -64,9 +61,6 @@
 {#if showSidebar}
 	<Sidebar.Provider bind:open={sidebarOpen}>
 		<AppSidebar />
-		{#if showRightSidebar}
-			<AppSidebarRight />
-		{/if}
 		<Sidebar.Inset>
 			<header class="flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
 				<div class="flex items-center gap-2">

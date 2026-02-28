@@ -1,6 +1,6 @@
 <script>
 	import { page } from '$app/stores';
-	import { Home, Database, Network } from 'lucide-svelte';
+	import { Home, Database, Network, Play } from 'lucide-svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar';
 
 	const navItems = [
@@ -18,6 +18,11 @@
 			title: 'Network',
 			url: '/network',
 			icon: Network
+		},
+		{
+			title: 'Runs',
+			url: '/runs',
+			icon: Play
 		}
 	];
 

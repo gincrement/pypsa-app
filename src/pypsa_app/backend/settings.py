@@ -79,6 +79,13 @@ class Settings(BaseSettings):
         json_schema_extra={"category": "Authentication", "depends_on": "enable_auth"},
     )
 
+    # Runs
+    smk_executor_url: str | None = Field(
+        default=None,
+        description="URL of the smk-executor service (e.g. http://smk-executor:8000)",
+        json_schema_extra={"category": "Runs"},
+    )
+
     # Caching
     redis_url: str | None = Field(
         default=None,

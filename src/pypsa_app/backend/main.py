@@ -13,6 +13,7 @@ from pypsa_app.backend.api.routes import (
     admin,
     auth,
     cache,
+    runs,
     networks,
     plots,
     statistics,
@@ -129,6 +130,28 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Authentication disabled")
 
+    # Check smk-executor connectivity
+    if settings.smk_executor_url:
+        try:
+            from pypsa_app.backend.services.run import SmkExecutorClient
+
+            client = SmkExecutorClient(settings.smk_executor_url)
+            health = client.health_check()
+            logger.info(
+                "smk-executor connected",
+                extra={
+                    "url": settings.smk_executor_url,
+                    "status": health.get("status"),
+                },
+            )
+        except Exception as e:
+            logger.warning(
+                "smk-executor unreachable at startup (non-fatal)",
+                extra={"url": settings.smk_executor_url, "error": str(e)},
+            )
+    else:
+        logger.info("smk-executor not configured (SMK_EXECUTOR_URL not set)")
+
     yield
 
     # Shutdown
@@ -230,6 +253,7 @@ app.include_router(
 app.include_router(cache.router, prefix=f"{API_V1_PREFIX}/cache", tags=["cache"])
 app.include_router(version.router, prefix=f"{API_V1_PREFIX}/version", tags=["version"])
 app.include_router(tasks.router, prefix=f"{API_V1_PREFIX}/tasks", tags=["tasks"])
+app.include_router(runs.router, prefix=f"{API_V1_PREFIX}/runs", tags=["runs"])
 
 
 # Health check endpoint
@@ -239,6 +263,7 @@ def health_check():
         "status": "healthy",
         "version": __version__,
         "cache": {"status": "unknown", "type": "redis"},
+        "smk_executor": {"status": "not_configured"},
     }
 
     # Check cache health
@@ -260,6 +285,20 @@ def health_check():
         health_status["cache"]["status"] = "unhealthy"
         health_status["cache"]["error"] = str(e)
         health_status["status"] = "degraded"
+
+    # Check smk-executor health
+    if settings.smk_executor_url:
+        try:
+            from pypsa_app.backend.services.run import SmkExecutorClient
+
+            client = SmkExecutorClient(settings.smk_executor_url)
+            result = client.health_check()
+            health_status["smk_executor"]["status"] = result.get("status", "unknown")
+            health_status["smk_executor"]["ssh"] = result.get("ssh", False)
+        except Exception as e:
+            health_status["smk_executor"]["status"] = "unhealthy"
+            health_status["smk_executor"]["error"] = str(e)
+            health_status["status"] = "degraded"
 
     return health_status
 

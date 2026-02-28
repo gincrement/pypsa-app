@@ -1,0 +1,191 @@
+<script>
+	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { browser } from '$app/environment';
+	import { page } from '$app/stores';
+	import { runs } from '$lib/api/client.js';
+	import { formatRelativeTime } from '$lib/utils.js';
+	import Pagination from '$lib/components/Pagination.svelte';
+	import { CircleAlert, Play } from 'lucide-svelte';
+	import * as Alert from '$lib/components/ui/alert';
+	import DataTable from '$lib/components/DataTable.svelte';
+	import { createColumns } from './components/columns.js';
+	import { authStore } from '$lib/stores/auth.svelte.js';
+	import EmptyState from '$lib/components/EmptyState.svelte';
+	import TableSkeleton from '$lib/components/TableSkeleton.svelte';
+
+	// Data state
+	let runsList = $state([]);
+	let loading = $state(true);
+	let error = $state(null);
+	let totalRuns = $state(0);
+	let cancellingId = $state(null);
+	let removingId = $state(null);
+
+	// Pagination state
+	let currentPage = $state(1);
+	let pageSize = $state(25);
+
+	// Table state
+	let sorting = $state([]);
+
+	// View state for conditional rendering
+	const viewState = $derived.by(() => {
+		if (loading) return 'loading';
+		if (runsList.length === 0) return 'empty';
+		return 'data';
+	});
+
+	const columns = $derived.by(() => {
+		const authEnabled = authStore.authEnabled;
+		return createColumns({
+			formatRelativeTime,
+			handleCancel,
+			handleRemove,
+			authEnabled,
+			getCancellingId: () => cancellingId,
+			getRemovingId: () => removingId
+		});
+	});
+
+	onMount(async () => {
+		if (browser) {
+			const savedPageSize = localStorage.getItem('runsPageSize');
+			if (savedPageSize) pageSize = parseInt(savedPageSize);
+		}
+
+		const urlPage = $page.url.searchParams.get('page');
+		const urlSize = $page.url.searchParams.get('size');
+
+		if (urlPage) {
+			const parsed = parseInt(urlPage);
+			if (!isNaN(parsed) && parsed > 0) currentPage = parsed;
+		}
+		if (urlSize) {
+			const parsed = parseInt(urlSize);
+			if (!isNaN(parsed) && [10, 25, 50, 100].includes(parsed)) pageSize = parsed;
+		}
+
+		await loadRuns();
+	});
+
+	async function loadRuns() {
+		loading = true;
+		error = null;
+		try {
+			const skip = (currentPage - 1) * pageSize;
+			const response = await runs.list(skip, pageSize);
+
+			runsList = response.data;
+			totalRuns = response.meta.total;
+
+			const totalPages = Math.ceil(totalRuns / pageSize);
+			if (currentPage > totalPages && totalPages > 0) {
+				currentPage = totalPages;
+				await updateURL();
+				return loadRuns();
+			}
+		} catch (err) {
+			if (err.cancelled) return;
+			error = err.message;
+		} finally {
+			loading = false;
+		}
+	}
+
+	async function updateURL() {
+		if (!browser) return;
+		const url = new URL(window.location.href);
+		url.searchParams.set('page', currentPage.toString());
+		url.searchParams.set('size', pageSize.toString());
+		await goto(url.toString(), { replaceState: true, keepFocus: true, noScroll: true });
+	}
+
+	async function handlePageChange(page) {
+		currentPage = page;
+		await updateURL();
+		await loadRuns();
+		if (browser) window.scrollTo({ top: 0, behavior: 'smooth' });
+	}
+
+	async function handlePageSizeChange(size) {
+		pageSize = size;
+		currentPage = 1;
+		if (browser) localStorage.setItem('runsPageSize', size.toString());
+		await updateURL();
+		await loadRuns();
+	}
+
+	async function handleCancel(runId) {
+		if (cancellingId) return;
+		if (!confirm('Are you sure you want to cancel this run?')) {
+			return;
+		}
+		cancellingId = runId;
+		error = null;
+		try {
+			await runs.cancel(runId);
+			await loadRuns();
+		} catch (err) {
+			if (!err.cancelled) error = err.message;
+		} finally {
+			cancellingId = null;
+		}
+	}
+
+	async function handleRemove(runId) {
+		if (removingId) return;
+		if (!confirm('Are you sure you want to remove this run? This will delete all associated files and cannot be undone.')) {
+			return;
+		}
+		removingId = runId;
+		error = null;
+		try {
+			await runs.remove(runId);
+			await loadRuns();
+		} catch (err) {
+			if (!err.cancelled) error = err.message;
+		} finally {
+			removingId = null;
+		}
+	}
+</script>
+
+<div class="min-h-screen">
+	<div class="max-w-[80rem] mx-auto py-8">
+		<!-- Error Alert -->
+		{#if error}
+			<Alert.Root variant="destructive" class="mb-4">
+				<CircleAlert class="size-4" />
+				<Alert.Title>Error</Alert.Title>
+				<Alert.Description>{error}</Alert.Description>
+			</Alert.Root>
+		{/if}
+
+		<!-- Content based on view state -->
+		{#if viewState === 'loading'}
+			<TableSkeleton rows={pageSize > 10 ? 10 : pageSize} />
+		{:else if viewState === 'empty'}
+			<EmptyState icon={Play} title="No Runs" description="No workflow runs yet." />
+		{:else}
+			<DataTable
+				data={runsList}
+				{columns}
+				totalItems={totalRuns}
+				{pageSize}
+				bind:sorting
+				onRowClick={(run) => goto(`/runs/${run.id}`)}
+			/>
+
+			<div class="mt-6">
+				<Pagination
+					{currentPage}
+					{pageSize}
+					totalItems={totalRuns}
+					onPageChange={handlePageChange}
+					onPageSizeChange={handlePageSizeChange}
+				/>
+			</div>
+		{/if}
+	</div>
+</div>
