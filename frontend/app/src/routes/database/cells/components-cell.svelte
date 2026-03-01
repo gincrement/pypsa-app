@@ -1,5 +1,13 @@
-<script>
-	let { network, isExpanded, toggleComponentsExpanded } = $props();
+<script lang="ts">
+	import type { Network } from '$lib/types.js';
+
+	interface ComponentsCellProps {
+		network: Network;
+		isExpanded: boolean;
+		toggleComponentsExpanded: (id: string) => void;
+	}
+
+	let { network, isExpanded, toggleComponentsExpanded }: ComponentsCellProps = $props();
 </script>
 
 <div class="flex flex-wrap gap-1">

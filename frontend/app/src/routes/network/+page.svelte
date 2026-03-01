@@ -1,9 +1,10 @@
-<script>
+<script lang="ts">
 	import { page } from '$app/stores';
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { browser, dev } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { networks, plots } from '$lib/api/client.js';
+	import type { Network as NetworkType, PlotData, PlotResponse, ApiError } from '$lib/types.js';
 	import { formatFileSize, formatDate, formatRelativeTime, formatNumber, getDirectoryPath, getTagType, getTagColor } from '$lib/utils.js';
 	import { Network, AlertCircle, FolderOpen, Clock, CalendarRange, Waypoints, Map, ChevronLeft, ChevronRight, SlidersHorizontal, PanelRight } from 'lucide-svelte';
 	import NavNetworkFilters from '$lib/components/sidebar/NavNetworkFilters.svelte';
@@ -28,32 +29,70 @@
 		setCompareMode
 	} from '$lib/stores/networkPageStore';
 
+	// Local interfaces for extended runtime data
+	interface NetworkWithFacets extends Omit<NetworkType, 'dimensions_count' | 'components_count'> {
+		dimensions_count?: Record<string, number>;
+		components_count?: Record<string, number>;
+		facets?: {
+			carriers?: Record<string, { nice_name?: string; color?: string }>;
+			countries?: string[];
+		};
+		meta?: {
+			carriers?: Record<string, { nice_name?: string; color?: string }>;
+			[key: string]: unknown;
+		};
+		file_hash?: string;
+		[key: string]: unknown;
+	}
+
+	interface CarrierPlot {
+		carrier: string;
+		carrierName: string;
+		plotData: PlotData;
+	}
+
+	interface ExtendedPlotData extends Record<string, unknown> {
+		statistic?: string;
+		plotType?: string;
+		plot_data?: PlotData;
+		cache_hit?: boolean;
+		multiplePlots?: CarrierPlot[];
+	}
+
+	interface TabConfig {
+		id: string;
+		label: string;
+		statistic: string;
+		plotType: string;
+		parameters: Record<string, unknown>;
+	}
+
 	// Props for layout
 	let { children } = $props();
 
-	let network = $state(null);
-	let selectedNetworks = $state([]); // For compare mode - populated from network IDs
-	let plotData = $state(null);
-	let loading = $state(true);
-	let loadingInfo = $state(false); // For loading multiple networks
-	let error = $state(null);
+	let network = $state<NetworkWithFacets | null>(null);
+	let selectedNetworks = $state<NetworkWithFacets[]>([]); // For compare mode - populated from network IDs
+	let plotData = $state<ExtendedPlotData | null>(null);
+	let loading = $state<boolean>(true);
+	let loadingInfo = $state<boolean>(false); // For loading multiple networks
+	let error = $state<string | null>(null);
 
-	let loadingPlot = $state(false);
-	let plotDiv = $state();
-	let Plotly = $state();
-	let activeTab = $state('energy-balance-timeseries');
-	let loadNetworkTimeout;
-	let hashCopied = $state(false);
-	let updateHistoryExpanded = $state(false);
-	let resizeHandler;
+	let loadingPlot = $state<boolean>(false);
+	let plotDiv = $state<HTMLDivElement | undefined>();
+	let Plotly = $state<any>();
+	let activeTab = $state<string>('energy-balance-timeseries');
+	let loadNetworkTimeout: ReturnType<typeof setTimeout>;
+	let hashCopied = $state<boolean>(false);
+	let updateHistoryExpanded = $state<boolean>(false);
+	let resizeHandler: (() => void) | undefined;
 
 	// Map thumbnail state
-	let thumbnailUrl = $state(null);
-	let thumbnailLoading = $state(false);
-	let thumbnailError = $state(false);
+	let thumbnailUrl = $state<string | null>(null);
+	let thumbnailLoading = $state<boolean>(false);
+	let thumbnailError = $state<boolean>(false);
 
 	// Compare mode state - derived from URL and synced with store
-	let compareMode = $state(false);
+	let compareMode = $state<boolean>(false);
 
 	// Request tracking to prevent race conditions
 	let plotRequestId = 0;
@@ -61,17 +100,17 @@
 
 	// Filter state - using stores, but keeping local references for backwards compatibility
 	// Sync stores with local state using $derived
-	let selectedCarriers = $derived(Array.from($selectedCarriersStore));
-	let selectedCountries = $derived(Array.from($selectedCountriesStore));
-	let individualPlots = $derived($showIndividualPlots);
+	let selectedCarriers = $derived<string[]>(Array.from($selectedCarriersStore));
+	let selectedCountries = $derived<string[]>(Array.from($selectedCountriesStore));
+	let individualPlots = $derived<boolean>($showIndividualPlots);
 
 	// Track previous filter state to avoid infinite loops
 	let lastFilterState = '';
 	let isLoadingInitial = false;
 
 	// Merged facets from all selected networks (for compare mode)
-	let mergedCarriers = {};
-	let mergedCountries = [];
+	let mergedCarriers: Record<string, any> = {};
+	let mergedCountries: string[] = [];
 
 	// Get network ID(s) from URL params
 	let networkId = $derived($page.url.searchParams.get('id'));
@@ -125,7 +164,7 @@
 	});
 
 	// Auto-reload plot when filters change (debounced)
-	let filterUpdateTimeout;
+	let filterUpdateTimeout: ReturnType<typeof setTimeout>;
 	$effect(() => {
 		// Create a fingerprint of current filter state
 		const currentFilterState = JSON.stringify([selectedCarriers, selectedCountries, individualPlots, activeTab, compareMode ? networkIds : networkId]);
@@ -165,7 +204,7 @@
 
 	// Tab configuration with statistic and plot type
 	// Note: x, y, stacked parameters omitted - let PyPSA use its defaults
-	const tabs = [
+	const tabs: TabConfig[] = [
 		{
 			id: 'energy-balance-timeseries',
 			label: 'Energy Balance Timeseries',
@@ -218,19 +257,19 @@
 					if (plotDiv && document.body.contains(plotDiv)) {
 						try {
 							Plotly.Plots.resize(plotDiv);
-						} catch (err) {
+						} catch (err: unknown) {
 							console.warn('Error resizing single plot on window resize:', err);
 						}
 					}
 
 					// Resize all individual plots
 					if (plotData?.multiplePlots) {
-						plotData.multiplePlots.forEach((plot, index) => {
+						plotData.multiplePlots.forEach((plot: CarrierPlot, index: number) => {
 							const plotElement = document.getElementById(`plot-${index}`);
 							if (plotElement && document.body.contains(plotElement)) {
 								try {
 									Plotly.Plots.resize(plotElement);
-								} catch (err) {
+								} catch (err: unknown) {
 									console.warn(`Error resizing plot-${index} on window resize:`, err);
 								}
 							}
@@ -262,8 +301,8 @@
 				const firstNetworkId = response.data[0].id;
 				goto(`/network?id=${firstNetworkId}`);
 			}
-		} catch (err) {
-			if (err.cancelled) {
+		} catch (err: unknown) {
+			if ((err as ApiError).cancelled) {
 				loadingNetworksStore.set(false);
 				return;
 			}
@@ -280,7 +319,7 @@
 		plotData = null;
 
 		try {
-			network = await networks.get(networkId);
+			network = await networks.get(networkId) as NetworkWithFacets;
 			loading = false;
 
 			// Reset filters when loading a new network
@@ -291,9 +330,9 @@
 
 			// Load thumbnail for map preview
 			loadThumbnail();
-		} catch (err) {
+		} catch (err: unknown) {
 			console.error('Error loading network:', err);
-			error = err.message;
+			error = (err as Error).message;
 			loading = false;
 		}
 	}
@@ -323,7 +362,7 @@
 			const blob = new Blob([svgText], { type: 'image/svg+xml' });
 			thumbnailUrl = URL.createObjectURL(blob);
 			thumbnailLoading = false;
-		} catch (err) {
+		} catch (err: unknown) {
 			console.error('Error loading topology SVG:', err);
 			thumbnailError = true;
 			thumbnailLoading = false;
@@ -346,7 +385,7 @@
 		try {
 			// Get individual network info
 			const networkPromises = networkIds.map(id => networks.get(id));
-			selectedNetworks = await Promise.all(networkPromises);
+			selectedNetworks = await Promise.all(networkPromises) as NetworkWithFacets[];
 
 			// Merge facets from all networks
 			mergeFacets();
@@ -358,9 +397,9 @@
 
 			// Set active tab (reactive statement will trigger plot load)
 			activeTab = tabs[0].id;
-		} catch (err) {
+		} catch (err: unknown) {
 			console.error('Error loading networks:', err);
-			error = err.message;
+			error = (err as Error).message;
 			loadingInfo = false;
 		}
 	}
@@ -531,7 +570,7 @@
 
 		// Preserve existing country selections or select all by default
 		if (network?.facets?.countries && network.facets.countries.length > 0) {
-			const preservedCountries = Array.from(currentCountries).filter(c => network.facets.countries.includes(c));
+			const preservedCountries = Array.from(currentCountries).filter(c => network!.facets!.countries!.includes(c));
 
 			if (preservedCountries.length > 0) {
 				// Keep existing selections that are still available
@@ -569,7 +608,7 @@
 		}, 100);
 	}
 
-	function switchNetwork(newNetworkId) {
+	function switchNetwork(newNetworkId: string) {
 		if (compareMode) {
 			// In compare mode, clicking should toggle selection
 			toggleNetworkSelection(newNetworkId);
@@ -579,9 +618,9 @@
 		}
 	}
 
-	function toggleNetworkSelection(networkId) {
+	function toggleNetworkSelection(networkId: string) {
 		const currentIds = networkIds || [];
-		let newIds;
+		let newIds: string[];
 
 		if (currentIds.includes(networkId)) {
 			newIds = currentIds.filter(id => id !== networkId);
@@ -620,7 +659,7 @@
 		plotData = null;
 	}
 
-	function updateURL(ids) {
+	function updateURL(ids: string[]) {
 		if (ids.length === 0 && compareMode) {
 			// Keep compare mode active even with no selection
 			goto('/network?ids=');
@@ -646,7 +685,7 @@
 		clearTimeout(filterUpdateTimeout);
 	});
 
-async function loadPlot(statistic, plotType, parameters = {}) {
+async function loadPlot(statistic: string, plotType: string, parameters: Record<string, unknown> = {}) {
 		// Increment request ID to invalidate any previous in-flight requests
 		const currentRequestId = ++plotRequestId;
 
@@ -654,7 +693,7 @@ async function loadPlot(statistic, plotType, parameters = {}) {
 		error = null;
 		try {
 			// Use networkIds for compare mode, networkId for single mode
-			const ids = compareMode ? networkIds : networkId;
+			const ids = compareMode ? networkIds : networkId!;
 			const response = await plots.generate(ids, statistic, plotType, parameters);
 
 			// Check if this request is still valid (not superseded by a newer request)
@@ -722,17 +761,17 @@ async function loadPlot(statistic, plotType, parameters = {}) {
 				}
 
 				// Cleanup existing plot if any (prevents memory leaks and rendering conflicts)
-				if (plotDiv._plotly) {
+				if ((plotDiv as any)._plotly) {
 					try {
 						Plotly.purge(plotDiv);
-					} catch (purgeErr) {
+					} catch (purgeErr: unknown) {
 						console.warn('Plotly.purge warning:', purgeErr);
 					}
 				}
 
 				// Ensure layout uses full width - don't set explicit width, use autosize
 				const layout = {
-					...response.plot_data.layout,
+					...(response.plot_data.layout as Record<string, unknown>),
 					autosize: true,
 					width: undefined,  // Remove any explicit width to allow full responsive behavior
 					height: undefined,  // Remove any explicit height too
@@ -758,9 +797,9 @@ async function loadPlot(statistic, plotType, parameters = {}) {
 					if (plotDiv && document.body.contains(plotDiv) && currentRequestId === plotRequestId && componentMounted) {
 						Plotly.Plots.resize(plotDiv);
 					}
-				} catch (plotlyErr) {
+				} catch (plotlyErr: unknown) {
 					console.error('Plotly.newPlot error:', plotlyErr);
-					error = `Failed to render plot: ${plotlyErr.message}`;
+					error = `Failed to render plot: ${(plotlyErr as Error).message}`;
 				}
 			} else {
 				console.error('Missing plot data or Plotly:', {
@@ -769,21 +808,21 @@ async function loadPlot(statistic, plotType, parameters = {}) {
 					Plotly: !!Plotly
 				});
 			}
-		} catch (err) {
+		} catch (err: unknown) {
 			// Only set error if this is still the current request
 			if (currentRequestId === plotRequestId) {
-				if (err.cancelled) {
+				if ((err as ApiError).cancelled) {
 					loadingPlot = false;
 					return;
 				}
-				error = err.message;
+				error = (err as Error).message;
 				loadingPlot = false;
 				plotData = null; // Clear old plot data when error occurs
 			}
 		}
 	}
 
-	function getComponentCount(component, fallback = [], net = null) {
+	function getComponentCount(component: string, fallback: string[] = [], net: NetworkWithFacets | null = null) {
 		const mapping = (net || network)?.components_count;
 		if (!mapping) return 0;
 		const keys = [component, ...fallback];
@@ -794,7 +833,7 @@ async function loadPlot(statistic, plotType, parameters = {}) {
 		}
 		return 0;
 	}
-	function getRelativePath(fullPath) {
+	function getRelativePath(fullPath: string) {
 		if (!fullPath) return '';
 		// Remove /data/networks prefix if present
 		if (fullPath.includes('/data/networks/')) {
@@ -805,20 +844,20 @@ async function loadPlot(statistic, plotType, parameters = {}) {
 		return fullPath;
 	}
 
-	async function copyToClipboard(text) {
+	async function copyToClipboard(text: string) {
 		try {
 			await navigator.clipboard.writeText(text);
 			hashCopied = true;
 			setTimeout(() => {
 				hashCopied = false;
 			}, 2000);
-		} catch (err) {
+		} catch (err: unknown) {
 			console.error('Failed to copy to clipboard:', err);
 		}
 	}
 
-	function buildFilterParameters(tabConfig, carriers) {
-		const params = {
+	function buildFilterParameters(tabConfig: TabConfig, carriers: string[]) {
+		const params: Record<string, unknown> = {
 			...tabConfig.parameters
 		};
 
@@ -858,7 +897,7 @@ async function loadPlot(statistic, plotType, parameters = {}) {
 				loadingPlot = true;
 				error = null;
 
-				const carrierPlots = [];
+				const carrierPlots: CarrierPlot[] = [];
 				for (const carrier of selectedCarriers) {
 					// Check if request is still valid before each carrier
 					if (currentRequestId !== plotRequestId || !componentMounted) {
@@ -870,7 +909,7 @@ async function loadPlot(statistic, plotType, parameters = {}) {
 						const parameters = buildFilterParameters(activeTabConfig, [carrier]);
 
 						// Generate plot for this carrier (use appropriate IDs based on mode)
-						const ids = compareMode ? networkIds : networkId;
+						const ids = compareMode ? networkIds : networkId!;
 						const response = await plots.generate(ids, activeTabConfig.statistic, activeTabConfig.plotType, parameters);
 
 						// Check again after async operation
@@ -885,7 +924,7 @@ async function loadPlot(statistic, plotType, parameters = {}) {
 							carrierName: carrierInfo?.[carrier]?.nice_name || carrier,
 							plotData: response.plot_data
 						});
-					} catch (err) {
+					} catch (err: unknown) {
 						console.error(`Failed to generate plot for carrier ${carrier}:`, err);
 					}
 				}
@@ -965,7 +1004,7 @@ async function loadPlot(statistic, plotType, parameters = {}) {
 
 							// Use autosize without explicit width/height for responsive behavior
 							const layout = {
-								...plot.plotData.layout,
+								...(plot.plotData.layout as Record<string, unknown>),
 								autosize: true,
 								width: undefined,  // Remove explicit width
 								height: undefined,  // Remove explicit height
@@ -986,7 +1025,7 @@ async function loadPlot(statistic, plotType, parameters = {}) {
 								if (plotElement && document.body.contains(plotElement) && currentRequestId === plotRequestId && componentMounted) {
 									Plotly.Plots.resize(plotElement);
 								}
-							} catch (plotlyErr) {
+							} catch (plotlyErr: unknown) {
 								console.error(`Plotly.newPlot error for ${plotDivId}:`, plotlyErr);
 							}
 						}
@@ -997,15 +1036,15 @@ async function loadPlot(statistic, plotType, parameters = {}) {
 				const parameters = buildFilterParameters(activeTabConfig, selectedCarriers);
 				await loadPlot(activeTabConfig.statistic, activeTabConfig.plotType, parameters);
 			}
-		} catch (err) {
+		} catch (err: unknown) {
 			console.error('Error in loadPlotsForCarriers:', err);
 			// Only set error if this is still the current request
 			if (currentRequestId === plotRequestId) {
-				if (err.cancelled) {
+				if ((err as ApiError).cancelled) {
 					loadingPlot = false;
 					return;
 				}
-				error = err.message;
+				error = (err as Error).message;
 				loadingPlot = false;
 				plotData = null; // Clear old plot data when error occurs
 			}
@@ -1152,7 +1191,7 @@ async function loadPlot(statistic, plotType, parameters = {}) {
 									</div>
 								{/each}
 							{:else}
-								{#key plotData.statistic + plotData.plotType + (plotData.cache_hit || '')}
+								{#key (plotData.statistic ?? '') + (plotData.plotType ?? '') + (plotData.cache_hit || '')}
 									<div class="w-full rounded-lg border-2 border-border/50 shadow-md overflow-hidden bg-white h-[500px]">
 										<div bind:this={plotDiv} class="w-full h-full"></div>
 									</div>
@@ -1346,7 +1385,7 @@ async function loadPlot(statistic, plotType, parameters = {}) {
 										{#if network.file_hash}
 											<div class="flex items-start gap-2">
 												<button
-													onclick={() => copyToClipboard(network.file_hash)}
+													onclick={() => copyToClipboard(network!.file_hash!)}
 													class="font-mono text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer text-left break-all"
 													title="Click to copy"
 												>
@@ -1545,7 +1584,7 @@ async function loadPlot(statistic, plotType, parameters = {}) {
 							{/each}
 						{:else}
 							<!-- Single merged plot - use key to force recreation when data changes -->
-							{#key plotData.statistic + plotData.plotType + (plotData.cache_hit || '')}
+							{#key (plotData.statistic ?? '') + (plotData.plotType ?? '') + (plotData.cache_hit || '')}
 								<div class="w-full rounded-lg border-2 border-border/50 shadow-md overflow-hidden bg-white h-[500px]">
 									<div bind:this={plotDiv} class="w-full h-full"></div>
 								</div>

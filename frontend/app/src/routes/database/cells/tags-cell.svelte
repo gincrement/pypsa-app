@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	let { network, getTagType, getTagColor } = $props();
 </script>
 

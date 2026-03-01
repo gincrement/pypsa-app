@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import { page } from '$app/stores';
 	import { Home, Database, Network, Play } from 'lucide-svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar';
@@ -37,7 +37,7 @@
 			{#each navItems as item}
 				<Sidebar.MenuItem>
 					<Sidebar.MenuButton tooltipContent={item.title} isActive={currentPath === item.url}>
-						{#snippet child({ props })}
+						{#snippet child({ props }: { props: Record<string, unknown> })}
 							<a href={item.url} {...props}>
 								<item.icon />
 								<span>{item.title}</span>

@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import { ScanSearch, Upload } from 'lucide-svelte';
 	import {
 		SidebarGroup,
@@ -9,20 +9,20 @@
 	} from '$lib/components/ui/sidebar';
 
 	// Props for event handlers
-	let { onScanNetworks = () => {} } = $props();
+	let { onScanNetworks = () => {} }: { onScanNetworks?: () => void } = $props();
 </script>
 
 <SidebarGroup>
 	<SidebarGroupLabel>Quick Actions</SidebarGroupLabel>
 	<SidebarMenu>
 		<SidebarMenuItem>
-			<SidebarMenuButton on:click={onScanNetworks}>
+			<SidebarMenuButton onclick={onScanNetworks}>
 				<ScanSearch />
 				<span>Scan Networks</span>
 			</SidebarMenuButton>
 		</SidebarMenuItem>
 		<SidebarMenuItem>
-			<SidebarMenuButton disabled>
+			<SidebarMenuButton aria-disabled="true">
 				<Upload />
 				<span>Upload Network</span>
 			</SidebarMenuButton>

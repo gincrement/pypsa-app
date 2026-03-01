@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import { ChevronDown, X } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Popover from '$lib/components/ui/popover';
@@ -14,14 +14,29 @@
 	 * - emptyMeansAll: if true, empty set displays as "All" (default: true)
 	 */
 
+	interface FilterOption {
+		id: string;
+		label: string;
+		avatarUrl?: string;
+		icon?: typeof import('lucide-svelte').X;
+	}
+
 	let {
 		label = 'Filter',
-		options = [],
-		selected = new Set(),
+		options = [] as FilterOption[],
+		selected = new Set<string>(),
 		onChange,
-		align = 'start',
+		align = 'start' as 'start' | 'center' | 'end',
 		width = 'w-48',
 		emptyMeansAll = true
+	}: {
+		label?: string;
+		options?: FilterOption[];
+		selected?: Set<string>;
+		onChange?: (selected: Set<string>) => void;
+		align?: 'start' | 'center' | 'end';
+		width?: string;
+		emptyMeansAll?: boolean;
 	} = $props();
 
 	let open = $state(false);
@@ -51,7 +66,7 @@
 	// Filter is active when not showing all
 	const isFiltered = $derived(!effectivelyAll || isExplicitNone);
 
-	function setOptionChecked(optionId, checked) {
+	function setOptionChecked(optionId: string, checked: boolean) {
 		if (isExplicitNone) {
 			// Currently "none" - user clicks to check one item
 			onChange?.(new Set([optionId]));
@@ -88,13 +103,13 @@
 		onChange?.(new Set([NONE_MARKER]));
 	}
 
-	function handleClear(e) {
+	function handleClear(e: MouseEvent) {
 		e.stopPropagation();
 		selectAll();
 	}
 
 	// Visual checkbox state
-	function isOptionChecked(optionId) {
+	function isOptionChecked(optionId: string) {
 		if (isExplicitNone) return false;
 		if (isEmpty && emptyMeansAll) return true;
 		return selected.has(optionId);
@@ -102,7 +117,7 @@
 </script>
 
 <Popover.Root bind:open>
-	<Popover.Trigger asChild>
+	<Popover.Trigger>
 		{#snippet child({ props })}
 			<Button
 				variant="outline"

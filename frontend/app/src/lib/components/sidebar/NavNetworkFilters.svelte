@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import { Switch } from '$lib/components/ui/switch';
 	import { Button } from '$lib/components/ui/button';

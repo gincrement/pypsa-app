@@ -1,12 +1,12 @@
-<script>
+<script lang="ts">
 	import { Dialog as SheetPrimitive } from "bits-ui";
-	import { cn } from "$lib/utils.js";
+	import { cn } from "$lib/lib/utils.js";
 
 	let {
 		ref = $bindable(null),
 		class: className,
 		...restProps
-	} = $props();
+	}: SheetPrimitive.DescriptionProps = $props();
 </script>
 
 <SheetPrimitive.Description

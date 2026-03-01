@@ -1,9 +1,14 @@
-<script>
+<script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { Share2, Lock } from 'lucide-svelte';
 	import * as Tooltip from '$lib/components/ui/tooltip';
+	import type { Network } from '$lib/types.js';
 
-	let { network, canEdit, onToggle } = $props();
+	let { network, canEdit, onToggle }: {
+		network: Network;
+		canEdit: boolean;
+		onToggle: (id: string, visibility: 'public' | 'private') => void;
+	} = $props();
 
 	const isSystem = $derived(!network.owner);
 	const isPublic = $derived(network.visibility === 'public');
@@ -16,8 +21,8 @@
 {:else}
 	<div onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Enter' && e.stopPropagation()} role="button" tabindex="-1">
 		<Tooltip.Root>
-			<Tooltip.Trigger asChild>
-				{#snippet child({ props })}
+			<Tooltip.Trigger>
+				{#snippet child({ props }: { props: Record<string, unknown> })}
 					{#if canEdit}
 						<Button
 							variant="ghost"

@@ -1,6 +1,7 @@
-<script>
+<script lang="ts">
 	import * as Sheet from "$lib/components/ui/sheet/index.js";
-	import { cn } from "$lib/utils.js";
+	import { cn, type WithElementRef } from "$lib/lib/utils.js";
+	import type { HTMLAttributes } from "svelte/elements";
 	import { SIDEBAR_WIDTH_MOBILE } from "./constants.js";
 	import { useSidebar } from "./context.svelte.js";
 
@@ -12,6 +13,10 @@
 		class: className,
 		children,
 		...restProps
+	}: WithElementRef<HTMLAttributes<HTMLDivElement>> & {
+		side?: "left" | "right";
+		variant?: "sidebar" | "floating" | "inset";
+		collapsible?: "offcanvas" | "icon" | "none";
 	} = $props();
 
 	const sidebar = useSidebar();
@@ -20,7 +25,7 @@
 {#if collapsible === "none"}
 	<div
 		class={cn(
-			"bg-sidebar text-sidebar-foreground w-(--sidebar-width) flex h-full flex-col",
+			"bg-sidebar text-sidebar-foreground flex h-full w-(--sidebar-width) flex-col",
 			className
 		)}
 		bind:this={ref}
@@ -53,7 +58,7 @@
 {:else}
 	<div
 		bind:this={ref}
-		class="text-sidebar-foreground group peer block"
+		class="text-sidebar-foreground group peer hidden md:block"
 		data-state={sidebar.state}
 		data-collapsible={sidebar.state === "collapsed" ? collapsible : ""}
 		data-variant={variant}
@@ -63,23 +68,26 @@
 		<!-- This is what handles the sidebar gap on desktop -->
 		<div
 			data-slot="sidebar-gap"
-			style="width: {sidebar.state === 'collapsed' && collapsible === 'icon' ? 'var(--sidebar-width-icon)' : 'var(--sidebar-width)'};"
 			class={cn(
-				"relative bg-transparent transition-[width] duration-200 ease-linear",
-				"group-data-[side=right]:rotate-180"
+				"relative w-(--sidebar-width) bg-transparent transition-[width] duration-200 ease-linear",
+				"group-data-[collapsible=offcanvas]:w-0",
+				"group-data-[side=right]:rotate-180",
+				variant === "floating" || variant === "inset"
+					? "group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
+					: "group-data-[collapsible=icon]:w-(--sidebar-width-icon)"
 			)}
 		></div>
 		<div
 			data-slot="sidebar-container"
-			style={"width: " + (sidebar.state === 'collapsed' && collapsible === 'icon' ? 'var(--sidebar-width-icon)' : 'var(--sidebar-width)') + ";"}
 			class={cn(
-				"fixed inset-y-0 z-10 flex h-svh transition-[width] duration-200 ease-linear",
+				"fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[left,right,width] duration-200 ease-linear md:flex",
 				side === "left"
-					? "left-0"
-					: "right-0",
+					? "start-0 group-data-[collapsible=offcanvas]:start-[calc(var(--sidebar-width)*-1)]"
+					: "end-0 group-data-[collapsible=offcanvas]:end-[calc(var(--sidebar-width)*-1)]",
+				// Adjust the padding for floating and inset variants.
 				variant === "floating" || variant === "inset"
-					? "p-2"
-					: "",
+					? "p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)+(--spacing(4))+2px)]"
+					: "group-data-[collapsible=icon]:w-(--sidebar-width-icon) group-data-[side=left]:border-e group-data-[side=right]:border-s",
 				className
 			)}
 			{...restProps}
@@ -87,16 +95,7 @@
 			<div
 				data-sidebar="sidebar"
 				data-slot="sidebar-inner"
-				class={cn(
-					"bg-sidebar flex h-full w-full flex-col",
-					variant === "floating"
-						? "rounded-lg border border-sidebar-border shadow-sm"
-						: variant !== "inset"
-							? side === "left"
-								? "border-r border-sidebar-border"
-								: "border-l border-sidebar-border"
-							: ""
-				)}
+				class="bg-sidebar group-data-[variant=floating]:border-sidebar-border flex h-full w-full flex-col group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:border group-data-[variant=floating]:shadow-sm"
 			>
 				{@render children?.()}
 			</div>

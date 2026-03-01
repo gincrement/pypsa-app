@@ -1,10 +1,23 @@
-<script>
+<script lang="ts">
 	import { Search, X, Eye, EyeOff } from 'lucide-svelte';
 	import { Input } from '$lib/components/ui/input';
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import OwnerFilter from './OwnerFilter.svelte';
 	import { authStore } from '$lib/stores/auth.svelte.js';
+	import type { Network, User } from '$lib/types.js';
+	import type { ColumnDef, VisibilityState, AccessorKeyColumnDef } from '@tanstack/table-core';
+
+	type ColumnWithAccessor = ColumnDef<Network, unknown> & { accessorKey?: string };
+
+	interface FilterBarProps {
+		filters?: { search: string; owners: Set<string> };
+		availableOwners?: User[];
+		columns?: ColumnWithAccessor[];
+		columnVisibility?: VisibilityState;
+		onFilterChange?: (filters: { search: string; owners: Set<string> }) => void;
+		onColumnVisibilityChange?: (visibility: VisibilityState) => void;
+	}
 
 	let {
 		filters = { search: '', owners: new Set() },
@@ -13,22 +26,22 @@
 		columnVisibility = {},
 		onFilterChange,
 		onColumnVisibilityChange
-	} = $props();
+	}: FilterBarProps = $props();
 
 	// Check if any filter is active
 	const hasActiveFilters = $derived(
 		filters.search.length > 0 || filters.owners.size > 0
 	);
 
-	function handleSearchInput(e) {
-		onFilterChange?.({ ...filters, search: e.target.value });
+	function handleSearchInput(e: Event) {
+		onFilterChange?.({ ...filters, search: (e.target as HTMLInputElement).value });
 	}
 
 	function clearSearch() {
 		onFilterChange?.({ ...filters, search: '' });
 	}
 
-	function handleOwnersChange(owners) {
+	function handleOwnersChange(owners: Set<string>) {
 		onFilterChange?.({ ...filters, owners });
 	}
 
@@ -36,7 +49,7 @@
 		onFilterChange?.({ search: '', owners: new Set() });
 	}
 
-	function toggleColumn(columnId, checked) {
+	function toggleColumn(columnId: string, checked: boolean) {
 		onColumnVisibilityChange?.({
 			...columnVisibility,
 			[columnId]: checked
@@ -88,8 +101,8 @@
 
 	<!-- Column Visibility -->
 	<DropdownMenu.Root>
-		<DropdownMenu.Trigger asChild>
-			{#snippet child({ props })}
+		<DropdownMenu.Trigger>
+			{#snippet child({ props }: { props: Record<string, unknown> })}
 				<Button variant="outline" size="sm" class="h-8" {...props}>
 					<Eye class="h-4 w-4 mr-1" />
 					Columns
@@ -101,11 +114,11 @@
 			<DropdownMenu.Separator />
 			{#each columns as column}
 				{#if column.accessorKey || column.id}
-					{@const columnId = column.id || column.accessorKey}
+					{@const columnId = (column.id || column.accessorKey) as string}
 					{@const isVisible = columnVisibility[columnId] !== false}
 					<DropdownMenu.CheckboxItem
 						checked={isVisible}
-						onCheckedChange={(checked) => toggleColumn(columnId, checked)}
+						onCheckedChange={(checked: boolean) => toggleColumn(columnId, checked)}
 					>
 						{#if isVisible}
 							<Eye class="h-4 w-4 mr-2" />

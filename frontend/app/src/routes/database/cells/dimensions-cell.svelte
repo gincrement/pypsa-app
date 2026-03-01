@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import { Clock, CalendarRange, Waypoints } from 'lucide-svelte';
 
 	let { network } = $props();

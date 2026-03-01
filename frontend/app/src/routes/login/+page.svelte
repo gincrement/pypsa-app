@@ -1,11 +1,11 @@
-<script>
+<script lang="ts">
 	import { authStore } from '$lib/stores/auth.svelte.js';
 	import { CircleAlert } from 'lucide-svelte';
 	import * as Alert from '$lib/components/ui/alert';
 	import LoginForm from '$lib/components/login-form.svelte';
 
 	let loading = $state(false);
-	let error = $state(null);
+	let error = $state<string | null>(null);
 
 	// Server guard handles redirect if already logged in
 

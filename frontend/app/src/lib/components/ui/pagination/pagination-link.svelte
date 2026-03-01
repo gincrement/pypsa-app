@@ -6,7 +6,7 @@
 	let {
 		ref = $bindable(null),
 		class: className,
-		size = "default",
+		size = "icon",
 		isActive,
 		page,
 		children,
@@ -29,10 +29,9 @@
 	data-active={isActive}
 	class={cn(
 		buttonVariants({
-			variant: isActive ? "default" : "ghost",
+			variant: isActive ? "outline" : "ghost",
 			size,
 		}),
-		"min-w-9",
 		className
 	)}
 	children={children || Fallback}

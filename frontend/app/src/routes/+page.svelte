@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	// Home page - no auth redirect needed, handled by layout
 </script>
 

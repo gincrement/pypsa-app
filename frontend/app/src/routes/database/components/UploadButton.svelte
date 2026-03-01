@@ -1,9 +1,15 @@
-<script>
+<script lang="ts">
 	import { Upload, Globe, FileUp } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 
-	let { variant = 'default', size = 'sm', label = 'Upload' } = $props();
+	interface UploadButtonProps {
+		variant?: 'default' | 'link' | 'destructive' | 'secondary' | 'outline' | 'ghost';
+		size?: 'default' | 'sm' | 'lg' | 'icon' | 'icon-sm' | 'icon-lg';
+		label?: string;
+	}
+
+	let { variant = 'default', size = 'sm', label = 'Upload' }: UploadButtonProps = $props();
 
 	function handleUploadFromUrl() {
 		alert('Upload from URL - Coming soon!');
@@ -15,8 +21,8 @@
 </script>
 
 <DropdownMenu.Root>
-	<DropdownMenu.Trigger asChild>
-		{#snippet child({ props })}
+	<DropdownMenu.Trigger>
+		{#snippet child({ props }: { props: Record<string, unknown> })}
 			<Button {variant} {size} {...props}>
 				<Upload class="h-4 w-4 mr-2" />
 				{label}

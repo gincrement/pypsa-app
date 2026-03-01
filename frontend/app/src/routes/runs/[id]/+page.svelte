@@ -1,9 +1,10 @@
-<script>
+<script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { runs } from '$lib/api/client.js';
 	import { formatRelativeTime, formatDuration } from '$lib/utils.js';
+	import type { Run, ApiError } from '$lib/types.js';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
@@ -11,18 +12,18 @@
 	import * as Alert from '$lib/components/ui/alert';
 	import StatusCell from '../cells/status-cell.svelte';
 
-	const runId = $derived($page.params.id);
+	const runId = $derived($page.params.id as string);
 
-	let run = $state(null);
-	let logs = $state([]);
+	let run = $state<Run | null>(null);
+	let logs = $state<string[]>([]);
 	let loading = $state(true);
-	let error = $state(null);
+	let error = $state<string | null>(null);
 	let streaming = $state(false);
 	let streamDone = $state(false);
 
-	let eventSource = null;
-	let pollInterval = null;
-	let logContainer;
+	let eventSource: EventSource | null = null;
+	let pollInterval: ReturnType<typeof setInterval> | null = null;
+	let logContainer: HTMLDivElement;
 
 	const isTerminal = $derived(
 		run && ['COMPLETED', 'FAILED', 'CANCELLED'].includes(run.status)
@@ -56,7 +57,7 @@
 		try {
 			run = await runs.get(runId);
 		} catch (err) {
-			if (!err.cancelled) error = err.message;
+			if (!(err as ApiError).cancelled) error = (err as Error).message;
 		} finally {
 			loading = false;
 		}
@@ -74,10 +75,10 @@
 			scrollToBottom();
 		};
 
-		eventSource.addEventListener('done', (event) => {
+		eventSource.addEventListener('done', () => {
 			streamDone = true;
 			streaming = false;
-			eventSource.close();
+			eventSource!.close();
 			eventSource = null;
 			// Refresh run data to get final status
 			loadRun();

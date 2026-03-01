@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import { authStore } from '$lib/stores/auth.svelte.js';
 	import ScanButton from './ScanButton.svelte';
 	import UploadButton from './UploadButton.svelte';

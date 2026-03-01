@@ -1,11 +1,13 @@
-<script>
+<script lang="ts">
 	import { Separator } from "$lib/components/ui/separator/index.js";
-	import { cn } from "$lib/utils.js";
+	import { cn } from "$lib/lib/utils.js";
+	import type { ComponentProps } from "svelte";
+
 	let {
 		ref = $bindable(null),
 		class: className,
 		...restProps
-	} = $props();
+	}: ComponentProps<typeof Separator> = $props();
 </script>
 
 <Separator

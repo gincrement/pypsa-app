@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import { authStore } from '$lib/stores/auth.svelte.js';
 	import Button from '$lib/components/ui/button/button.svelte';
 

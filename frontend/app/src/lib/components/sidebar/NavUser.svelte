@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import { LogOut, User, ChevronsUpDown, LogIn } from 'lucide-svelte';
 	import { authStore } from '$lib/stores/auth.svelte.js';
 	import { goto } from '$app/navigation';
@@ -9,7 +9,7 @@
 	const sidebar = Sidebar.useSidebar();
 
 	// Get user initials for fallback
-	function getInitials(name) {
+	function getInitials(name: string) {
 		if (!name) return 'U';
 		const parts = name.split(' ');
 		if (parts.length >= 2) {
@@ -32,8 +32,8 @@
 <Sidebar.Menu>
 	<Sidebar.MenuItem>
 		<DropdownMenu.Root>
-			<DropdownMenu.Trigger asChild>
-				{#snippet child({ props })}
+			<DropdownMenu.Trigger>
+				{#snippet child({ props }: { props: Record<string, unknown> })}
 					{#if authStore.isAuthenticated}
 						<Sidebar.MenuButton size="lg" class="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground" {...props}>
 							<Avatar.Root class="h-8 w-8 rounded-lg">

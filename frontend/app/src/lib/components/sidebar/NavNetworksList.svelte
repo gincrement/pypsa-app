@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import * as Sidebar from '$lib/components/ui/sidebar';
@@ -16,9 +16,9 @@
 		toggleCompareMode
 	} from '$lib/stores/networkPageStore';
 
-	function handleNetworkClick(networkId, event) {
+	function handleNetworkClick(networkId: string, event: MouseEvent) {
 		// Prevent default if clicking on checkbox
-		if (event.target.type === 'checkbox') {
+		if ((event.target as HTMLInputElement).type === 'checkbox') {
 			return;
 		}
 
@@ -39,7 +39,7 @@
 		}
 	}
 
-	function handleCheckboxChange(networkId) {
+	function handleCheckboxChange(networkId: string) {
 		toggleNetwork(networkId);
 		// Update URL with all selected network IDs
 		const ids = Array.from($selectedNetworkIds);
@@ -79,7 +79,7 @@
 						<Sidebar.MenuItem>
 							{#if $compareMode}
 								<Sidebar.MenuButton isActive={isSelected}>
-									{#snippet child({ props })}
+									{#snippet child({ props }: { props: Record<string, unknown> })}
 										<button
 											{...props}
 											onclick={(e) => handleNetworkClick(network.id, e)}
@@ -96,7 +96,7 @@
 								</Sidebar.MenuButton>
 							{:else}
 								<Sidebar.MenuButton isActive={isSelected}>
-									{#snippet child({ props })}
+									{#snippet child({ props }: { props: Record<string, unknown> })}
 										<a
 											{...props}
 											href="/network?id={network.id}"

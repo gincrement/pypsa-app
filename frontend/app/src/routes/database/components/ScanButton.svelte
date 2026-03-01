@@ -1,8 +1,15 @@
-<script>
+<script lang="ts">
 	import { FolderSync, LoaderCircle } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui/button';
 
-	let { scanning = false, variant = 'outline', size = 'sm', onScan } = $props();
+	interface ScanButtonProps {
+		scanning?: boolean;
+		variant?: 'default' | 'link' | 'destructive' | 'secondary' | 'outline' | 'ghost';
+		size?: 'default' | 'sm' | 'lg' | 'icon' | 'icon-sm' | 'icon-lg';
+		onScan?: () => void;
+	}
+
+	let { scanning = false, variant = 'outline', size = 'sm', onScan }: ScanButtonProps = $props();
 </script>
 
 <Button {variant} {size} onclick={onScan} disabled={scanning}>

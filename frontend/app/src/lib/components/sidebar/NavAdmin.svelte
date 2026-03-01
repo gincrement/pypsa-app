@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import { page } from '$app/stores';
 	import { Users, Network } from 'lucide-svelte';
 	import { authStore } from '$lib/stores/auth.svelte.js';
@@ -28,7 +28,7 @@
 				{#each navItems as item}
 					<Sidebar.MenuItem>
 						<Sidebar.MenuButton tooltipContent={item.title} isActive={currentPath === item.url}>
-							{#snippet child({ props })}
+							{#snippet child({ props }: { props: Record<string, unknown> })}
 								<a href={item.url} {...props}>
 									<item.icon />
 									<span>{item.title}</span>

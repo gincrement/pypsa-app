@@ -1,7 +1,8 @@
-<script>
+<script lang="ts">
 	import { onMount } from 'svelte';
 	import { admin } from '$lib/api/client.js';
 	import { formatFileSize, formatDate } from '$lib/utils.js';
+	import type { Network, User, NetworkFilters, NetworkUpdate } from '$lib/types.js';
 	import { Globe, Lock, Server, Settings, Loader2 } from 'lucide-svelte';
 	import Button from '$lib/components/ui/button/button.svelte';
 	import * as Table from '$lib/components/ui/table';
@@ -11,17 +12,17 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Label } from '$lib/components/ui/label';
 
-	let networks = $state([]);
-	let users = $state([]);
+	let networks = $state<Network[]>([]);
+	let users = $state<User[]>([]);
 	let loading = $state(true);
-	let error = $state(null);
+	let error = $state<string | null>(null);
 	let filter = $state('all');
-	let selectedNetwork = $state(null);
+	let selectedNetwork = $state<Network | null>(null);
 	let dialogOpen = $state(false);
 
 	// Form state for editing
-	let editOwner = $state(null);
-	let editVisibility = $state(null);
+	let editOwner = $state<string | undefined>(undefined);
+	let editVisibility = $state<string | undefined>(undefined);
 
 	// Loading states
 	let saving = $state(false);
@@ -37,7 +38,7 @@
 		loading = true;
 		error = null;
 		try {
-			const filters = {};
+			const filters: NetworkFilters = {};
 			if (filter === 'public') filters.visibility = 'public';
 			else if (filter === 'private') filters.visibility = 'private';
 			else if (filter === 'system') filters.owner = 'system';
@@ -45,7 +46,7 @@
 			const response = await admin.listNetworks(0, 100, filters);
 			networks = response.data;
 		} catch (err) {
-			error = err.message;
+			error = (err as Error).message;
 		} finally {
 			loading = false;
 		}
@@ -59,16 +60,16 @@
 		} catch (err) {
 			console.error('Failed to load users:', err);
 			usersLoadFailed = true;
-			error = `Failed to load users: ${err.message}. Owner changes disabled.`;
+			error = `Failed to load users: ${(err as Error).message}. Owner changes disabled.`;
 		}
 	}
 
-	async function handleFilterChange(newFilter) {
+	async function handleFilterChange(newFilter: string) {
 		filter = newFilter;
 		await loadNetworks();
 	}
 
-	function openNetworkDialog(network) {
+	function openNetworkDialog(network: Network) {
 		selectedNetwork = network;
 		editOwner = network.owner?.id || 'system';
 		editVisibility = network.visibility;
@@ -78,7 +79,7 @@
 	async function saveChanges() {
 		if (!selectedNetwork || saving) return;
 
-		const updates = {};
+		const updates: NetworkUpdate = {};
 
 		// Handle owner change
 		const newOwnerId = editOwner === 'system' ? null : editOwner;
@@ -88,7 +89,7 @@
 
 		// Handle visibility change
 		if (editVisibility !== selectedNetwork.visibility) {
-			updates.visibility = editVisibility;
+			updates.visibility = editVisibility as NetworkUpdate['visibility'];
 		}
 
 		if (Object.keys(updates).length === 0) {
@@ -104,7 +105,7 @@
 			dialogOpen = false;
 		} catch (err) {
 			const changedFields = Object.keys(updates).join(', ');
-			error = `Failed to update "${selectedNetwork.filename}" (${changedFields}): ${err.message}`;
+			error = `Failed to update "${selectedNetwork.filename}" (${changedFields}): ${(err as Error).message}`;
 		} finally {
 			saving = false;
 		}
@@ -125,16 +126,16 @@
 			confirmDeleteOpen = false;
 			dialogOpen = false;
 		} catch (err) {
-			error = `Failed to delete "${selectedNetwork.filename}": ${err.message}`;
+			error = `Failed to delete "${selectedNetwork.filename}": ${(err as Error).message}`;
 		} finally {
 			deleting = false;
 		}
 	}
 
-	function getVisibilityBadge(visibility, hasOwner) {
-		if (!hasOwner) return { variant: 'secondary', label: 'System', icon: Server };
-		if (visibility === 'public') return { variant: 'default', label: 'Public', icon: Globe };
-		return { variant: 'outline', label: 'Private', icon: Lock };
+	function getVisibilityBadge(visibility: string, hasOwner: boolean) {
+		if (!hasOwner) return { variant: 'secondary' as const, label: 'System', icon: Server };
+		if (visibility === 'public') return { variant: 'default' as const, label: 'Public', icon: Globe };
+		return { variant: 'outline' as const, label: 'Private', icon: Lock };
 	}
 
 </script>

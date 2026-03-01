@@ -1,24 +1,25 @@
-<script>
+<script lang="ts">
 	import { onMount } from 'svelte';
 	import { authStore } from '$lib/stores/auth.svelte.js';
 	import { admin } from '$lib/api/client.js';
 	import { formatDate } from '$lib/utils.js';
-	import { Check, Clock, User, Shield, Settings } from 'lucide-svelte';
+	import { Check, Clock, User as UserIcon, Shield, Settings } from 'lucide-svelte';
 	import Button from '$lib/components/ui/button/button.svelte';
 	import * as Table from '$lib/components/ui/table';
 	import * as Avatar from '$lib/components/ui/avatar';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import { Badge } from '$lib/components/ui/badge';
 	import UsersSkeleton from './components/UsersSkeleton.svelte';
+	import type { User } from '$lib/types.js';
 
-	let users = $state([]);
+	let users = $state<User[]>([]);
 	let loading = $state(true);
-	let error = $state(null);
+	let error = $state<string | null>(null);
 	let filter = $state('all');
-	let selectedUser = $state(null);
+	let selectedUser = $state<User | null>(null);
 	let dialogOpen = $state(false);
-	let allPermissions = $state([]);
-	let rolePermissions = $state({});
+	let allPermissions = $state<string[]>([]);
+	let rolePermissions = $state<Record<string, string[]>>({});
 
 	onMount(async () => {
 		await Promise.all([loadUsers(), loadPermissions()]);
@@ -27,8 +28,8 @@
 	async function loadPermissions() {
 		try {
 			const response = await admin.getPermissions();
-			allPermissions = response.permissions;
-			rolePermissions = response.role_permissions;
+			allPermissions = response.permissions as string[];
+			rolePermissions = response.role_permissions as Record<string, string[]>;
 		} catch (err) {
 			console.error('Failed to load permissions:', err);
 		}
@@ -42,31 +43,31 @@
 			const response = await admin.listUsers(0, 100, role);
 			users = response.data;
 		} catch (err) {
-			error = err.message;
+			error = (err as Error).message;
 		} finally {
 			loading = false;
 		}
 	}
 
-	async function approveUser(userId) {
+	async function approveUser(userId: string) {
 		try {
 			await admin.approveUser(userId);
 			await loadUsers();
 		} catch (err) {
-			error = err.message;
+			error = (err as Error).message;
 		}
 	}
 
-	async function updateRole(userId, newRole) {
+	async function updateRole(userId: string, newRole: string) {
 		try {
 			await admin.updateUserRole(userId, newRole);
 			await loadUsers();
 		} catch (err) {
-			error = err.message;
+			error = (err as Error).message;
 		}
 	}
 
-	async function deleteUser(userId, username) {
+	async function deleteUser(userId: string, username: string) {
 		if (!confirm(`Are you sure you want to delete user "${username}"?`)) {
 			return;
 		}
@@ -74,27 +75,27 @@
 			await admin.deleteUser(userId);
 			await loadUsers();
 		} catch (err) {
-			error = err.message;
+			error = (err as Error).message;
 		}
 	}
 
-	async function handleFilterChange(newFilter) {
+	async function handleFilterChange(newFilter: string) {
 		filter = newFilter;
 		await loadUsers();
 	}
 
-	function openPermissions(user) {
+	function openPermissions(user: User) {
 		selectedUser = user;
 		dialogOpen = true;
 	}
 
-	function getRole(user) {
+	function getRole(user: User) {
 		if (!user.permissions?.length) return 'pending';
 		if (user.permissions.includes('users:manage')) return 'admin';
 		return 'user';
 	}
 
-	function getRoleBadgeVariant(role) {
+	function getRoleBadgeVariant(role: string) {
 		if (role === 'admin') return 'default';
 		if (role === 'user') return 'secondary';
 		return 'outline';
@@ -139,7 +140,7 @@
 			size="sm"
 			onclick={() => handleFilterChange('user')}
 		>
-			<User class="mr-1 size-4" />
+			<UserIcon class="mr-1 size-4" />
 			Users
 		</Button>
 		<Button
@@ -176,8 +177,8 @@
 							<Table.Cell>
 								<div class="flex items-center gap-2">
 									<Avatar.Root class="size-8">
-										<Avatar.Image src={user.avatar_url} alt={user.username} />
-										<Avatar.Fallback>
+										<Avatar.Image class="" src={user.avatar_url} alt={user.username} />
+										<Avatar.Fallback class="">
 											{user.username.substring(0, 2).toUpperCase()}
 										</Avatar.Fallback>
 									</Avatar.Root>
@@ -231,7 +232,7 @@
 			<Dialog.Header>
 				<Dialog.Title class="flex items-center gap-2 text-sm">
 					<Avatar.Root class="size-6">
-						<Avatar.Image src={selectedUser.avatar_url} alt={selectedUser.username} />
+						<Avatar.Image class="" src={selectedUser.avatar_url} alt={selectedUser.username} />
 						<Avatar.Fallback class="text-xs">
 							{selectedUser.username.substring(0, 2).toUpperCase()}
 						</Avatar.Fallback>
@@ -253,7 +254,7 @@
 						<select
 							class="rounded border bg-background px-2 py-1 text-xs"
 							value={userRole}
-							onchange={(e) => updateRole(selectedUser.id, e.target.value)}
+							onchange={(e: Event) => updateRole(selectedUser!.id, (e.target as HTMLSelectElement).value)}
 						>
 							<option value="admin">admin</option>
 							<option value="user">user</option>
@@ -273,7 +274,7 @@
 				{#if selectedUser.id !== authStore.user?.id}
 					<button
 						class="text-destructive hover:underline"
-						onclick={() => { deleteUser(selectedUser.id, selectedUser.username); dialogOpen = false; }}
+						onclick={() => { deleteUser(selectedUser!.id, selectedUser!.username); dialogOpen = false; }}
 					>
 						Delete user
 					</button>

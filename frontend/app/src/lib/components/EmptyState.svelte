@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import * as Empty from '$lib/components/ui/empty';
 
 	let { icon, title, description } = $props();

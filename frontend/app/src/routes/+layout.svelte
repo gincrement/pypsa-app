@@ -1,4 +1,5 @@
-<script>
+<script lang="ts">
+	import type { Snippet } from 'svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import '../app.css';
@@ -13,7 +14,7 @@
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 	import { PanelRight } from 'lucide-svelte';
 
-	let { children, toolbar } = $props();
+	let { children, toolbar }: { children?: Snippet; toolbar?: Snippet } = $props();
 
 	// Get current page name for breadcrumb
 	const pageName = $derived.by(() => {

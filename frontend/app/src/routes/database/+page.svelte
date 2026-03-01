@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
@@ -13,22 +13,24 @@
 	import { authStore } from '$lib/stores/auth.svelte.js';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import TableSkeleton from '$lib/components/TableSkeleton.svelte';
+	import type { Network as NetworkType, User, ApiError } from '$lib/types.js';
+	import type { ColumnDef, SortingState, VisibilityState, Row } from '@tanstack/table-core';
 
 	// Components
 	import ActionsBar from './components/ActionsBar.svelte';
 	import FilterBar from './components/FilterBar.svelte';
 
 	// Data state
-	let networksList = $state([]);
+	let networksList = $state<NetworkType[]>([]);
 	let loading = $state(true);
-	let error = $state(null);
+	let error = $state<string | null>(null);
 	let scanning = $state(false);
 	let totalNetworks = $state(0);
-	let deletingId = $state(null);  // Track which network is being deleted
-	let updatingVisibilityId = $state(null);  // Track which network visibility is being updated
+	let deletingId = $state<string | null>(null);  // Track which network is being deleted
+	let updatingVisibilityId = $state<string | null>(null);  // Track which network visibility is being updated
 
 	// Filter state (unified)
-	let filters = $state({
+	let filters = $state<{ search: string; owners: Set<string> }>({
 		search: '',
 		owners: new Set()  // empty = all, contains IDs = filter to those
 	});
@@ -38,12 +40,12 @@
 	let pageSize = $state(25);
 
 	// Table state
-	let sorting = $state([]);
-	let columnVisibility = $state({});
-	let expandedComponents = $state(new Set());
+	let sorting = $state<SortingState>([]);
+	let columnVisibility = $state<VisibilityState>({});
+	let expandedComponents = $state<Set<string>>(new Set());
 
 	// Available owners from API (all unique owners across all visible networks)
-	let availableOwners = $state([]);
+	let availableOwners = $state<User[]>([]);
 
 	// Derived: view state for conditional rendering
 	const viewState = $derived.by(() => {
@@ -59,7 +61,7 @@
 	// Use getters for dynamic values to avoid recreating columns on every state change
 	const columns = $derived.by(() => {
 		// Only depend on authEnabled for conditional columns
-		const authEnabled = authStore.authEnabled;
+		const authEnabled = authStore.authEnabled ?? false;
 		return createColumns({
 			getDirectoryPath,
 			getTagType,
@@ -77,7 +79,7 @@
 		});
 	});
 
-	function networkFilterFn(row, columnId, filterValue) {
+	function networkFilterFn(row: Row<NetworkType>, columnId: string, filterValue: string) {
 		const searchStr = filterValue.toLowerCase();
 		const network = row.original;
 		if (network.filename?.toLowerCase().includes(searchStr)) return true;
@@ -148,8 +150,8 @@
 				return loadNetworks();
 			}
 		} catch (err) {
-			if (err.cancelled) return;
-			error = err.message;
+			if ((err as ApiError).cancelled) return;
+			error = (err as Error).message;
 		} finally {
 			loading = false;
 		}
@@ -163,25 +165,25 @@
 		await goto(url.toString(), { replaceState: true, keepFocus: true, noScroll: true });
 	}
 
-	async function handleFilterChange(newFilters) {
+	async function handleFilterChange(newFilters: { search: string; owners: Set<string> }) {
 		filters = newFilters;
 		currentPage = 1;
 		await updateURL();
 		await loadNetworks();
 	}
 
-	function handleColumnVisibilityChange(visibility) {
+	function handleColumnVisibilityChange(visibility: VisibilityState) {
 		columnVisibility = visibility;
 	}
 
-	async function handlePageChange(page) {
+	async function handlePageChange(page: number) {
 		currentPage = page;
 		await updateURL();
 		await loadNetworks();
 		if (browser) window.scrollTo({ top: 0, behavior: 'smooth' });
 	}
 
-	async function handlePageSizeChange(size) {
+	async function handlePageSizeChange(size: number) {
 		pageSize = size;
 		currentPage = 1;
 		if (browser) localStorage.setItem('networksPageSize', size.toString());
@@ -196,13 +198,13 @@
 			await networks.scan();
 			await loadNetworks();
 		} catch (err) {
-			error = err.message;
+			error = (err as Error).message;
 		} finally {
 			scanning = false;
 		}
 	}
 
-	async function handleDelete(networkId) {
+	async function handleDelete(networkId: string) {
 		if (deletingId) return;  // Prevent double-click
 		if (!confirm('Are you sure you want to delete this network? This will remove both the database record and the file from disk. This action cannot be undone.')) {
 			return;
@@ -213,13 +215,13 @@
 			await networks.delete(networkId);
 			await loadNetworks();
 		} catch (err) {
-			if (!err.cancelled) error = err.message;
+			if (!(err as ApiError).cancelled) error = (err as Error).message;
 		} finally {
 			deletingId = null;
 		}
 	}
 
-	async function handleVisibilityToggle(networkId, newVisibility) {
+	async function handleVisibilityToggle(networkId: string, newVisibility: "public" | "private") {
 		if (updatingVisibilityId) return;  // Prevent double-click
 		updatingVisibilityId = networkId;
 		error = null;
@@ -227,17 +229,17 @@
 			await networks.updateVisibility(networkId, newVisibility);
 			await loadNetworks();
 		} catch (err) {
-			if (!err.cancelled) error = err.message;
+			if (!(err as ApiError).cancelled) error = (err as Error).message;
 		} finally {
 			updatingVisibilityId = null;
 		}
 	}
 
-	function viewNetwork(networkId) {
+	function viewNetwork(networkId: string) {
 		goto(`/network?id=${networkId}`);
 	}
 
-	function toggleComponentsExpanded(networkId) {
+	function toggleComponentsExpanded(networkId: string) {
 		if (expandedComponents.has(networkId)) {
 			expandedComponents.delete(networkId);
 		} else {
@@ -246,7 +248,7 @@
 		expandedComponents = expandedComponents;
 	}
 
-	function canEditVisibility(network) {
+	function canEditVisibility(network: NetworkType) {
 		if (!authStore.authEnabled || !authStore.user) return false;
 		// Only owner can edit - admin powers are on /admin/networks
 		return network.owner?.id === authStore.user.id;
@@ -288,13 +290,13 @@
 		{:else}
 			<DataTable
 				data={networksList}
-				{columns}
+				columns={columns as any}
 				totalItems={totalNetworks}
 				{pageSize}
 				bind:sorting
 				bind:columnVisibility
 				globalFilter={filters.search}
-				globalFilterFn={networkFilterFn}
+				globalFilterFn={networkFilterFn as any}
 				onRowClick={(network) => viewNetwork(network.id)}
 			/>
 

@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import { User, Server } from 'lucide-svelte';
 	import { MultiSelectFilter } from '$lib/components/ui/multi-select-filter';
 	import { authStore } from '$lib/stores/auth.svelte.js';

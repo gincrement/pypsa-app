@@ -1,9 +1,20 @@
-<script>
+<script lang="ts">
+	import type { Component } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { MoreVertical, Loader2 } from 'lucide-svelte';
 
-	let { actions = [] } = $props();
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	interface Action {
+		icon: any;
+		label?: string;
+		loadingLabel?: string;
+		loading?: boolean;
+		onclick?: () => void;
+		variant?: 'default' | 'destructive';
+	}
+
+	let { actions = [] }: { actions: Action[] } = $props();
 
 	const isLoading = $derived(actions.some((a) => a.loading));
 </script>
@@ -28,8 +39,8 @@
 {:else if actions.length > 1}
 	<div onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Enter' && e.stopPropagation()} role="button" tabindex="-1">
 		<DropdownMenu.Root>
-			<DropdownMenu.Trigger asChild>
-				{#snippet child({ props })}
+			<DropdownMenu.Trigger>
+				{#snippet child({ props }: { props: Record<string, unknown> })}
 					<Button variant="ghost" size="sm" {...props} class="h-8 w-8 p-0" disabled={isLoading}>
 						{#if isLoading}
 							<Loader2 class="h-4 w-4 animate-spin" />

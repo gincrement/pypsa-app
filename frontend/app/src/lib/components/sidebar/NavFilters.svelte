@@ -1,28 +1,34 @@
-<script>
+<script lang="ts">
 	import { page } from '$app/stores';
 	import { Search, X } from 'lucide-svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import { Input } from '$lib/components/ui/input';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
+	import type { TagType, TagColor } from '$lib/types.js';
 
 	// Props
 	let {
-		selectedTags = $bindable(new Set()),
+		selectedTags = $bindable(new Set<string>()),
 		tagSearchQuery = $bindable(''),
 		allTags = [],
 		onClearFilters = () => {}
+	}: {
+		selectedTags?: Set<string>;
+		tagSearchQuery?: string;
+		allTags?: string[];
+		onClearFilters?: () => void;
 	} = $props();
 
 	// Only show filters on /networks page
-	const showFilters = $derived($page.url.pathname === '/networks');
+	const showFilters = $derived($page.url.pathname === ('/networks' as string));
 
 	// Filter tags based on search query
 	const filteredTags = $derived(allTags.filter(tag =>
 		tag.toLowerCase().includes(tagSearchQuery.toLowerCase())
 	));
 
-	function toggleTag(tagName) {
+	function toggleTag(tagName: string) {
 		if (selectedTags.has(tagName)) {
 			selectedTags.delete(tagName);
 		} else {
@@ -31,7 +37,7 @@
 		selectedTags = selectedTags; // Trigger reactivity
 	}
 
-	function getTagType(tag) {
+	function getTagType(tag: string): TagType {
 		const name = tag.toLowerCase();
 
 		// Check for config type
@@ -48,7 +54,7 @@
 		return 'model';
 	}
 
-	function getTagColor(type) {
+	function getTagColor(type: TagType): TagColor {
 		switch (type) {
 			case 'model':
 				return 'tag-model';
@@ -83,7 +89,7 @@
 					variant="outline"
 					size="sm"
 					class="w-full h-8"
-					on:click={onClearFilters}
+					onclick={onClearFilters}
 				>
 					<X class="mr-2 h-4 w-4" />
 					Clear ({selectedTags.size})
@@ -99,7 +105,7 @@
 						{@const tagColorClass = getTagColor(tagType)}
 						<button
 							class="w-full text-left px-2 py-1.5 rounded-md text-sm transition-colors hover:bg-accent flex items-center gap-2 {isSelected ? 'bg-accent' : ''}"
-							on:click={() => toggleTag(tag)}
+							onclick={() => toggleTag(tag)}
 						>
 							<div class="flex-1 flex items-center gap-2">
 								<span class="inline-block w-2 h-2 rounded-full {tagColorClass}"></span>

@@ -1,5 +1,15 @@
-<script>
-	import { createTable, getCoreRowModel, getSortedRowModel, getFilteredRowModel } from '@tanstack/svelte-table';
+<script lang="ts" generics="TData">
+	import {
+		createTable,
+		getCoreRowModel,
+		getSortedRowModel,
+		getFilteredRowModel,
+		type ColumnDef,
+		type SortingState,
+		type VisibilityState,
+		type Updater,
+		type FilterFn
+	} from '@tanstack/svelte-table';
 	import * as Table from '$lib/components/ui/table';
 	import FlexRender from '$lib/components/ui/data-table/flex-render.svelte';
 	import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-svelte';
@@ -12,11 +22,21 @@
 		sorting = $bindable([]),
 		columnVisibility = $bindable({}),
 		globalFilter = $bindable(''),
-		globalFilterFn,
-		onRowClick
+		globalFilterFn = undefined,
+		onRowClick = undefined
+	}: {
+		data: TData[];
+		columns: ColumnDef<TData, unknown>[];
+		totalItems: number;
+		pageSize: number;
+		sorting?: SortingState;
+		columnVisibility?: VisibilityState;
+		globalFilter?: string;
+		globalFilterFn?: FilterFn<TData>;
+		onRowClick?: (row: TData) => void;
 	} = $props();
 
-	const table = createTable({
+	const table = createTable<TData>({
 		get data() {
 			return data;
 		},
@@ -41,13 +61,13 @@
 				return globalFilter;
 			}
 		},
-		onSortingChange: (updater) => {
+		onSortingChange: (updater: Updater<SortingState>) => {
 			sorting = typeof updater === 'function' ? updater(sorting) : updater;
 		},
-		onColumnVisibilityChange: (updater) => {
+		onColumnVisibilityChange: (updater: Updater<VisibilityState>) => {
 			columnVisibility = typeof updater === 'function' ? updater(columnVisibility) : updater;
 		},
-		onGlobalFilterChange: (updater) => {
+		onGlobalFilterChange: (updater: Updater<string>) => {
 			globalFilter = typeof updater === 'function' ? updater(globalFilter) : updater;
 		},
 		globalFilterFn: globalFilterFn ?? (() => true)
@@ -68,9 +88,10 @@
 											class="flex items-center gap-2 hover:text-foreground transition-colors"
 											onclick={header.column.getToggleSortingHandler()}
 										>
-											<FlexRender
-												content={header.column.columnDef.header}
-												context={header.getContext()}
+											<!-- eslint-disable-next-line @typescript-eslint/no-explicit-any -->
+										<FlexRender
+												content={header.column.columnDef.header as any}
+												context={header.getContext() as any}
 											/>
 											{#if header.column.getIsSorted() === 'asc'}
 												<ArrowUp class="h-4 w-4" />
@@ -81,9 +102,10 @@
 											{/if}
 										</button>
 									{:else}
+										<!-- eslint-disable-next-line @typescript-eslint/no-explicit-any -->
 										<FlexRender
-											content={header.column.columnDef.header}
-											context={header.getContext()}
+											content={header.column.columnDef.header as any}
+											context={header.getContext() as any}
 										/>
 									{/if}
 								{/if}
@@ -100,9 +122,10 @@
 					>
 						{#each row.getVisibleCells() as cell}
 							<Table.Cell>
+								<!-- eslint-disable-next-line @typescript-eslint/no-explicit-any -->
 								<FlexRender
-									content={cell.column.columnDef.cell}
-									context={cell.getContext()}
+									content={cell.column.columnDef.cell as any}
+									context={cell.getContext() as any}
 								/>
 							</Table.Cell>
 						{/each}

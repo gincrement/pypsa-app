@@ -1,10 +1,12 @@
-<script>
+<script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import { runs } from '$lib/api/client.js';
 	import { formatRelativeTime } from '$lib/utils.js';
+	import type { Run, ApiError } from '$lib/types.js';
+	import type { SortingState } from '@tanstack/table-core';
 	import Pagination from '$lib/components/Pagination.svelte';
 	import { CircleAlert, Play } from 'lucide-svelte';
 	import * as Alert from '$lib/components/ui/alert';
@@ -15,19 +17,19 @@
 	import TableSkeleton from '$lib/components/TableSkeleton.svelte';
 
 	// Data state
-	let runsList = $state([]);
+	let runsList = $state<Run[]>([]);
 	let loading = $state(true);
-	let error = $state(null);
+	let error = $state<string | null>(null);
 	let totalRuns = $state(0);
-	let cancellingId = $state(null);
-	let removingId = $state(null);
+	let cancellingId = $state<string | null>(null);
+	let removingId = $state<string | null>(null);
 
 	// Pagination state
 	let currentPage = $state(1);
 	let pageSize = $state(25);
 
 	// Table state
-	let sorting = $state([]);
+	let sorting = $state<SortingState>([]);
 
 	// View state for conditional rendering
 	const viewState = $derived.by(() => {
@@ -37,7 +39,7 @@
 	});
 
 	const columns = $derived.by(() => {
-		const authEnabled = authStore.authEnabled;
+		const authEnabled = authStore.authEnabled ?? false;
 		return createColumns({
 			formatRelativeTime,
 			handleCancel,
@@ -86,8 +88,8 @@
 				return loadRuns();
 			}
 		} catch (err) {
-			if (err.cancelled) return;
-			error = err.message;
+			if ((err as ApiError).cancelled) return;
+			error = (err as Error).message;
 		} finally {
 			loading = false;
 		}
@@ -101,14 +103,14 @@
 		await goto(url.toString(), { replaceState: true, keepFocus: true, noScroll: true });
 	}
 
-	async function handlePageChange(page) {
+	async function handlePageChange(page: number) {
 		currentPage = page;
 		await updateURL();
 		await loadRuns();
 		if (browser) window.scrollTo({ top: 0, behavior: 'smooth' });
 	}
 
-	async function handlePageSizeChange(size) {
+	async function handlePageSizeChange(size: number) {
 		pageSize = size;
 		currentPage = 1;
 		if (browser) localStorage.setItem('runsPageSize', size.toString());
@@ -116,7 +118,7 @@
 		await loadRuns();
 	}
 
-	async function handleCancel(runId) {
+	async function handleCancel(runId: string) {
 		if (cancellingId) return;
 		if (!confirm('Are you sure you want to cancel this run?')) {
 			return;
@@ -127,13 +129,13 @@
 			await runs.cancel(runId);
 			await loadRuns();
 		} catch (err) {
-			if (!err.cancelled) error = err.message;
+			if (!(err as ApiError).cancelled) error = (err as Error).message;
 		} finally {
 			cancellingId = null;
 		}
 	}
 
-	async function handleRemove(runId) {
+	async function handleRemove(runId: string) {
 		if (removingId) return;
 		if (!confirm('Are you sure you want to remove this run? This will delete all associated files and cannot be undone.')) {
 			return;
@@ -144,7 +146,7 @@
 			await runs.remove(runId);
 			await loadRuns();
 		} catch (err) {
-			if (!err.cancelled) error = err.message;
+			if (!(err as ApiError).cancelled) error = (err as Error).message;
 		} finally {
 			removingId = null;
 		}
@@ -170,11 +172,11 @@
 		{:else}
 			<DataTable
 				data={runsList}
-				{columns}
+				columns={columns as any}
 				totalItems={totalRuns}
 				{pageSize}
 				bind:sorting
-				onRowClick={(run) => goto(`/runs/${run.id}`)}
+				onRowClick={(run: Run) => goto(`/runs/${run.id}`)}
 			/>
 
 			<div class="mt-6">

@@ -1,9 +1,9 @@
-<script context="module">
+<script context="module" lang="ts">
 	// Module-level cache that persists across component instances
-	let cachedVersion = { pypsa: null, app: null };
+	let cachedVersion: { pypsa: string | null; app: string | null } = { pypsa: null, app: null };
 </script>
 
-<script>
+<script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
@@ -16,7 +16,7 @@
 	let appVersion = cachedVersion.app;
 
 	// Format version for display (remove .post1. and git hash)
-	function formatVersion(version) {
+	function formatVersion(version: string | null): string | null {
 		if (!version) return version;
 		return version.replace(/\.post\d+\./, '.').split('+')[0];
 	}
@@ -26,7 +26,7 @@
 
 	// User menu state
 	let showUserMenu = $state(false);
-	let userMenuContainer = $state(null);
+	let userMenuContainer = $state<HTMLDivElement | null>(null);
 
 	function toggleUserMenu() {
 		showUserMenu = !showUserMenu;
@@ -40,13 +40,13 @@
 	$effect(() => {
 		if (!showUserMenu || !browser) return;
 
-		function handleClickOutside(event) {
-			if (userMenuContainer && !userMenuContainer.contains(event.target)) {
+		function handleClickOutside(event: MouseEvent) {
+			if (userMenuContainer && !userMenuContainer.contains(event.target as Node)) {
 				showUserMenu = false;
 			}
 		}
 
-		function handleEscape(event) {
+		function handleEscape(event: KeyboardEvent) {
 			if (event.key === 'Escape') {
 				showUserMenu = false;
 			}
@@ -68,7 +68,7 @@
 		try {
 			const cached = localStorage.getItem('pypsa-version');
 			if (cached) {
-				const data = JSON.parse(cached);
+				const data = JSON.parse(cached) as { pypsa: string | null; app: string | null };
 				pypsaVersion = data.pypsa;
 				appVersion = data.app;
 				cachedVersion.pypsa = data.pypsa;
@@ -81,22 +81,24 @@
 		// Fetch fresh version
 		try {
 			const versionData = await version.get();
-			pypsaVersion = versionData.pypsa_version;
-			appVersion = versionData.app_version;
-			cachedVersion.pypsa = versionData.pypsa_version;
-			cachedVersion.app = versionData.app_version;
+			const pypsa = versionData.pypsa_version as string;
+			const app = versionData.app_version as string;
+			pypsaVersion = pypsa;
+			appVersion = app;
+			cachedVersion.pypsa = pypsa;
+			cachedVersion.app = app;
 
 			// Cache for future navigations
 			localStorage.setItem('pypsa-version', JSON.stringify({
-				pypsa: versionData.pypsa_version,
-				app: versionData.app_version
+				pypsa,
+				app
 			}));
 		} catch (err) {
 			console.error('Failed to fetch version:', err);
 		}
 	});
 
-	function isActive(path) {
+	function isActive(path: string): boolean {
 		// For exact match on home and database paths
 		if (path === '/' || path === '/networks') {
 			return currentPath === path;

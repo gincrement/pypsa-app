@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import * as Pagination from '$lib/components/ui/pagination';
 	import * as Select from '$lib/components/ui/select';
 
@@ -8,6 +8,12 @@
 		totalItems = 0,
 		onPageChange = () => {},
 		onPageSizeChange = () => {}
+	}: {
+		currentPage?: number;
+		pageSize?: number;
+		totalItems?: number;
+		onPageChange?: (page: number) => void;
+		onPageSizeChange?: (size: number) => void;
 	} = $props();
 
 	// Calculate pagination values
@@ -23,13 +29,13 @@
 	// Page size options
 	const pageSizeOptions = [10, 25, 50, 100];
 
-	function goToPage(page) {
+	function goToPage(page: number) {
 		if (page >= 1 && page <= totalPages && page !== currentPage) {
 			onPageChange(page);
 		}
 	}
 
-	function handlePageSizeChange(value) {
+	function handlePageSizeChange(value: string | undefined) {
 		if (value) {
 			const newSize = parseInt(value);
 			onPageSizeChange(newSize);

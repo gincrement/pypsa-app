@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { version } from '$lib/api/client.js';
@@ -15,10 +15,16 @@
 	const isNetworkPage = $derived($page.url.pathname === '/network');
 
 	// Version info
-	let versionData = $state(null);
+	interface VersionData {
+		backend: string;
+		frontendApp: string;
+		frontendMap: string;
+		pypsa: string;
+	}
+	let versionData = $state<VersionData | null>(null);
 
 	// Format version for display (remove .post1. and git hash)
-	function formatVersion(version) {
+	function formatVersion(version: string | undefined) {
 		if (!version) return version;
 		return version.replace(/\.post\d+\./, '.').split('+')[0];
 	}
@@ -38,10 +44,10 @@
 		try {
 			const data = await version.get();
 			versionData = {
-				backend: data.backend_version,
-				frontendApp: data.frontend_app_version,
-				frontendMap: data.frontend_map_version,
-				pypsa: data.pypsa_version
+				backend: data.backend_version as string,
+				frontendApp: data.frontend_app_version as string,
+				frontendMap: data.frontend_map_version as string,
+				pypsa: data.pypsa_version as string
 			};
 
 			// Cache for future use
@@ -57,7 +63,7 @@
 		<Sidebar.Menu>
 			<Sidebar.MenuItem>
 				<Sidebar.MenuButton size="lg">
-					{#snippet child({ props })}
+					{#snippet child({ props }: { props: Record<string, unknown> })}
 						<a href="/database" class="flex items-center gap-2" {...props}>
 							<img src="/pypsa-logo.svg" alt="PyPSA Logo" class="h-8 w-8 shrink-0 object-contain" />
 							<div class="flex flex-1 items-center gap-2 text-left text-sm leading-tight">
