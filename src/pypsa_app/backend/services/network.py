@@ -1,16 +1,15 @@
-import gc
 import hashlib
 import logging
 import math
 import threading
 import time
 from collections import OrderedDict
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 import pypsa
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from pypsa_app.backend.database import SessionLocal
 from pypsa_app.backend.models import Network
@@ -24,14 +23,14 @@ logger = logging.getLogger(__name__)
 class NetworkCache:
     """Thread-safe LRU cache for loaded PyPSA networks with TTL"""
 
-    def __init__(self, ttl_seconds: int = 3600, max_size: int = 10):
+    def __init__(self, ttl_seconds: int = 3600, max_size: int = 10) -> None:
         self.ttl_seconds = ttl_seconds
         self.max_size = max_size
         self.cache = OrderedDict()
         self.hits = self.misses = 0
         self._lock = threading.Lock()
 
-    def get(self, file_path: Path) -> Optional[pypsa.Network]:
+    def get(self, file_path: Path) -> pypsa.Network | None:
         """Get network from cache if not expired (thread-safe)"""
         key = str(file_path)
 
@@ -50,7 +49,7 @@ class NetworkCache:
             self.hits += 1
             return network
 
-    def put(self, file_path: Path, network: pypsa.Network):
+    def put(self, file_path: Path, network: pypsa.Network) -> None:
         """Add network to cache with LRU eviction (thread-safe)"""
         key = str(file_path)
 
@@ -78,7 +77,7 @@ class NetworkCache:
                 },
             )
 
-    def clear(self):
+    def clear(self) -> None:
         """Clear all cached networks (thread-safe)"""
         with self._lock:
             cached_count = len(self.cache)
@@ -116,7 +115,9 @@ _network_cache = NetworkCache(ttl_seconds=settings.network_cache_ttl)
 class NetworkService:
     """Service for PyPSA network operations (handles single networks)"""
 
-    def __init__(self, network: pypsa.Network | Path | str, use_cache: bool = True):
+    def __init__(
+        self, network: pypsa.Network | Path | str, use_cache: bool = True
+    ) -> None:
         """Initialize service with a network object or file path"""
         if isinstance(network, (Path, str)):
             self.file_path = validate_path(Path(network), must_exist=True)
@@ -140,10 +141,14 @@ class NetworkService:
             self.n = network
             self.file_path = None
         else:
-            raise ValueError("Invalid network type")
+            msg = "Invalid network type"
+            raise TypeError(msg)
 
     def extract_database_info(self) -> dict:
-        """Extract network metadata for database storage (mirrors Network model field order)"""
+        """Extract network metadata for database storage.
+
+        Mirrors Network model field order.
+        """
         info = {}
 
         info["name"] = self.n.name
@@ -203,10 +208,11 @@ class NetworkService:
     def calculate_file_hash(self) -> str:
         """Calculate SHA256 hash of the network file"""
         if self.file_path is None:
-            raise ValueError("Cannot calculate hash for network without file_path")
+            msg = "Cannot calculate hash for network without file_path"
+            raise ValueError(msg)
 
         sha256_hash = hashlib.sha256()
-        with open(self.file_path, "rb") as f:
+        with self.file_path.open("rb") as f:
             for byte_block in iter(lambda: f.read(4096), b""):
                 sha256_hash.update(byte_block)
         return sha256_hash.hexdigest()
@@ -214,30 +220,33 @@ class NetworkService:
     def get_file_size(self) -> int:
         """Get file size in bytes"""
         if self.file_path is None:
-            raise ValueError("Cannot get file size for network without file_path")
+            msg = "Cannot get file size for network without file_path"
+            raise ValueError(msg)
         return self.file_path.stat().st_size
 
 
 class NetworkCollectionService:
     """Service for PyPSA network collection operations (handles multiple networks)"""
 
-    def __init__(self, file_paths: list[Path] | list[str], use_cache: bool = True):
+    def __init__(
+        self, file_paths: list[Path] | list[str], use_cache: bool = True
+    ) -> None:
         """Initialize service by loading networks and creating a collection"""
         file_paths = [Path(p) for p in file_paths]
         names = self._generate_unique_names_from_paths(file_paths)
 
         networks = {}
-        for file_path, name in zip(file_paths, names):
-            file_path = validate_path(file_path, must_exist=True)
+        for file_path, name in zip(file_paths, names, strict=True):
+            validated = validate_path(file_path, must_exist=True)
 
             # Try cache first
-            if use_cache and (cached := _network_cache.get(file_path)):
+            if use_cache and (cached := _network_cache.get(validated)):
                 networks[name] = cached
             else:
                 # Load network directly
-                network = pypsa.Network(file_path)
+                network = pypsa.Network(validated)
                 if use_cache:
-                    _network_cache.put(file_path, network)
+                    _network_cache.put(validated, network)
                 networks[name] = network
 
         self.n = pypsa.NetworkCollection(
@@ -277,6 +286,7 @@ def load_service(
 
     Returns:
         NetworkService if single file, NetworkCollectionService if multiple files
+
     """
     if len(file_paths) == 1:
         return NetworkService(file_paths[0], use_cache=use_cache)
@@ -285,83 +295,70 @@ def load_service(
 
 
 def _process_network_file(
-    file_path: Path, existing: Network | None, db
+    file_path: Path, existing: Network | None, db: Session
 ) -> tuple[bool, bool, str | None]:
     """Process a single network file (create or update).
 
     Returns:
         Tuple of (was_added, was_updated, error_message)
+
     """
     try:
         service = NetworkService(file_path, use_cache=False)
         file_hash = service.calculate_file_hash()
-        file_size = service.get_file_size()
 
         if existing:
-            # Update existing network
-            needs_update = existing.file_hash != file_hash
-
-            if not needs_update:
-                del service
+            if existing.file_hash == file_hash:
                 return False, False, None
 
-            if needs_update:
-                info = service.extract_database_info()
-                existing.file_hash = file_hash
-                existing.file_size = file_size
-                existing.name = info["name"]
-                existing.components_count = info["components_count"]
-                existing.dimensions_count = info["dimensions_count"]
-                existing.meta = info["meta"]
-                existing.facets = info["facets"]
-
-                update_time = datetime.utcnow().isoformat()
-                if existing.update_history is None:
-                    existing.update_history = []
-                existing.update_history.append(update_time)
-
-            del service
-            gc.collect()
-            db.commit()
-
-            return False, needs_update, None
-
-        else:
-            # Add new network
             info = service.extract_database_info()
-            creation_time = datetime.utcnow().isoformat()
+            existing.file_hash = file_hash
+            existing.file_size = service.get_file_size()
+            existing.name = info["name"]
+            existing.components_count = info["components_count"]
+            existing.dimensions_count = info["dimensions_count"]
+            existing.meta = info["meta"]
+            existing.facets = info["facets"]
 
-            network = Network(
-                filename=file_path.name,
-                file_path=str(file_path),
-                file_hash=file_hash,
-                file_size=file_size,
-                name=info["name"],
-                components_count=info["components_count"],
-                dimensions_count=info["dimensions_count"],
-                meta=info["meta"],
-                facets=info["facets"],
-                update_history=[creation_time],
-            )
-            db.add(network)
+            now = datetime.now(UTC).isoformat()
+            existing.update_history = [*(existing.update_history or []), now]
 
-            try:
-                db.commit()
-                del service
-                gc.collect()
-                return True, False, None
-            except IntegrityError:
-                db.rollback()
-                del service
-                return False, False, None
+            db.commit()
+            return False, True, None
+
+        # Add new network
+        info = service.extract_database_info()
+        now = datetime.now(UTC).isoformat()
+
+        network = Network(
+            filename=file_path.name,
+            file_path=str(file_path),
+            file_hash=file_hash,
+            file_size=service.get_file_size(),
+            name=info["name"],
+            components_count=info["components_count"],
+            dimensions_count=info["dimensions_count"],
+            meta=info["meta"],
+            facets=info["facets"],
+            update_history=[now],
+        )
+        db.add(network)
+
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            return False, False, None
+        else:
+            return True, False, None
 
     except Exception as e:
         db.rollback()
-        logger.error(
+        logger.exception(
             "Failed to process network",
             extra={
-                "filename": file_path.name,
-                "file_path": str(file_path),
+                "network_filename": file_path.name,
+                "network_file_path": str(file_path),
                 "error": str(e),
                 "error_type": type(e).__name__,
             },
@@ -377,6 +374,7 @@ def scan_networks(networks_path: Path | str) -> dict:
 
     Returns:
         Dict with scan results (added, updated, errors)
+
     """
     networks_path = Path(networks_path)
     if not networks_path.exists():

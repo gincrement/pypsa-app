@@ -10,7 +10,7 @@ services:
     # Alternatively, you can give the mounted volume the correct permissions
     user: "${UID:-1000}:${GID:-1000}"
     ports:
-      - 8000:8000
+    - 8000:8000
     volumes:
-      - ../data:/app/data
+    - ../data:/app/data
     restart: unless-stopped

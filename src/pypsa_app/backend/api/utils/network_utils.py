@@ -21,9 +21,10 @@ def delete_network(network: Network, db: Session) -> str:
     if file_path.exists():
         try:
             file_path.unlink()
-            logger.info(f"Deleted network file: {file_path}")
-            return f"Network {filename} deleted successfully"
         except (PermissionError, OSError) as e:
-            logger.warning(f"DB deleted but file remains for {filename}: {e}")
+            logger.warning("DB deleted but file remains for %s: %s", filename, e)
+        else:
+            logger.info("Deleted network file: %s", file_path)
+            return f"Network {filename} deleted successfully"
 
     return f"Network {filename} removed from database (file cleanup may be needed)"

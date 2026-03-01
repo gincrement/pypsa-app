@@ -15,6 +15,7 @@ from pypsa_app.backend.models import (
     User,
     UserRole,
 )
+from pypsa_app.backend.permissions import ROLE_PERMISSIONS
 from pypsa_app.backend.schemas.auth import (
     UserListResponse,
     UserResponse,
@@ -34,10 +35,8 @@ logger = logging.getLogger(__name__)
 @router.get("/permissions")
 def get_permissions(
     admin: User = Depends(require_permission(Permission.USERS_MANAGE)),
-):
+) -> dict:
     """Get all available permissions and role mappings"""
-    from pypsa_app.backend.permissions import ROLE_PERMISSIONS
-
     return {
         "permissions": [p.value for p in Permission],
         "role_permissions": {
@@ -54,7 +53,7 @@ def list_users(
     role: str | None = Query(None, description="Filter by role"),
     db: Session = Depends(get_db),
     admin: User = Depends(require_permission(Permission.USERS_MANAGE)),
-):
+) -> UserListResponse:
     """List all users"""
     query = db.query(User)
 
@@ -62,12 +61,12 @@ def list_users(
         try:
             role_enum = UserRole(role)
             query = query.filter(User.role == role_enum)
-        except ValueError:
+        except ValueError as e:
             valid_roles = [r.value for r in UserRole]
             raise HTTPException(
                 status_code=400,
                 detail=f"Invalid role filter. Must be one of: {', '.join(valid_roles)}",
-            )
+            ) from e
 
     total = query.count()
     users = query.order_by(User.created_at.desc()).offset(skip).limit(limit).all()
@@ -84,7 +83,7 @@ def update_user_role(
     role_update: UserRoleUpdate,
     db: Session = Depends(get_db),
     admin: User = Depends(require_permission(Permission.USERS_MANAGE)),
-):
+) -> User:
     """Update user role"""
     new_role = UserRole(role_update.role)
 
@@ -101,7 +100,11 @@ def update_user_role(
     db.refresh(user)
 
     logger.info(
-        f"User role updated: {user.username} ({old_role} -> {user.role}) by {admin.username}"
+        "User role updated: %s (%s -> %s) by %s",
+        user.username,
+        old_role,
+        user.role,
+        admin.username,
     )
 
     return user
@@ -112,7 +115,7 @@ def approve_user(
     user_id: UUID,
     db: Session = Depends(get_db),
     admin: User = Depends(require_permission(Permission.USERS_MANAGE)),
-):
+) -> User:
     """Approve a pending user"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -128,7 +131,7 @@ def approve_user(
     db.commit()
     db.refresh(user)
 
-    logger.info(f"User approved: {user.username} by {admin.username}")
+    logger.info("User approved: %s by %s", user.username, admin.username)
 
     return user
 
@@ -138,7 +141,7 @@ def delete_user(
     user_id: UUID,
     db: Session = Depends(get_db),
     admin: User = Depends(require_permission(Permission.USERS_MANAGE)),
-):
+) -> dict:
     """Delete a user"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -151,7 +154,7 @@ def delete_user(
     db.delete(user)
     db.commit()
 
-    logger.info(f"User deleted: {username} by {admin.username}")
+    logger.info("User deleted: %s by %s", username, admin.username)
 
     return {"message": f"User {username} deleted successfully"}
 
@@ -166,7 +169,7 @@ def list_all_networks(
     ),
     db: Session = Depends(get_db),
     admin: User = Depends(require_permission(Permission.NETWORKS_VIEW_ALL)),
-):
+) -> NetworkListResponse:
     """List ALL networks (admin only) - bypasses normal visibility rules"""
     query = db.query(Network).options(joinedload(Network.owner))
 
@@ -175,11 +178,11 @@ def list_all_networks(
         try:
             vis_enum = NetworkVisibility(visibility)
             query = query.filter(Network.visibility == vis_enum)
-        except ValueError:
+        except ValueError as e:
             valid = [v.value for v in NetworkVisibility]
             raise HTTPException(
                 400, f"Invalid visibility. Must be one of: {', '.join(valid)}"
-            )
+            ) from e
 
     # Apply owner filter
     if owner:
@@ -189,10 +192,10 @@ def list_all_networks(
             try:
                 owner_uuid = UUID(owner)
                 query = query.filter(Network.user_id == owner_uuid)
-            except ValueError:
+            except ValueError as e:
                 raise HTTPException(
                     400, "Invalid owner filter. Must be 'system' or a valid UUID"
-                )
+                ) from e
 
     total = query.count()
     networks = query.order_by(Network.created_at.desc()).offset(skip).limit(limit).all()
@@ -209,7 +212,7 @@ def update_network_admin(
     body: NetworkAdminUpdate,
     db: Session = Depends(get_db),
     admin: User = Depends(require_permission(Permission.NETWORKS_VIEW_ALL)),
-):
+) -> Network:
     """Update network properties (admin only) - can change owner, visibility, name"""
     network = (
         db.query(Network)
@@ -253,7 +256,10 @@ def update_network_admin(
         db.commit()
         db.refresh(network)
         logger.info(
-            f"Network updated by admin: {network.filename} - {', '.join(changes)} by {admin.username}"
+            "Network updated by admin: %s - %s by %s",
+            network.filename,
+            ", ".join(changes),
+            admin.username,
         )
 
     return network
@@ -264,12 +270,12 @@ def delete_network_admin(
     network_id: UUID,
     db: Session = Depends(get_db),
     admin: User = Depends(require_permission(Permission.NETWORKS_VIEW_ALL)),
-):
+) -> dict:
     """Delete any network (admin only)"""
     network = db.query(Network).filter(Network.id == str(network_id)).first()
     if not network:
         raise HTTPException(404, "Network not found")
 
     message = delete_network(network, db)
-    logger.info(f"Network deleted by admin: {network.filename} by {admin.username}")
+    logger.info("Network deleted by admin: %s by %s", network.filename, admin.username)
     return {"message": message}

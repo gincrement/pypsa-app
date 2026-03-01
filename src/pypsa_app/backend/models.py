@@ -2,7 +2,8 @@
 
 import enum
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import (
     JSON,
@@ -18,8 +19,10 @@ from sqlalchemy import (
     UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID as PostgreSQL_UUID
+from sqlalchemy.engine.interfaces import Dialect
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy.types import TypeEngine
 
 from pypsa_app.backend.database import Base
 
@@ -30,24 +33,24 @@ class UuidType(TypeDecorator):
     impl = String(36)
     cache_ok = True
 
-    def load_dialect_impl(self, dialect):
+    def load_dialect_impl(self, dialect: Dialect) -> TypeEngine:
         if dialect.name == "postgresql":
             return dialect.type_descriptor(PostgreSQL_UUID(as_uuid=True))
         return dialect.type_descriptor(String(36))
 
-    def process_bind_param(self, value, dialect):
+    def process_bind_param(self, value: Any, dialect: Dialect) -> Any:
         if value is None:
             return None
         uuid_value = value if isinstance(value, uuid.UUID) else uuid.UUID(value)
         return uuid_value if dialect.name == "postgresql" else str(uuid_value)
 
-    def process_result_value(self, value, dialect):
+    def process_result_value(self, value: Any, dialect: Dialect) -> uuid.UUID | None:
         if value is None:
             return None
         return value if isinstance(value, uuid.UUID) else uuid.UUID(value)
 
 
-def str_enum(enum_cls, name):
+def str_enum(enum_cls: type[enum.Enum], name: str) -> Enum:
     """Create SQLAlchemy Enum that stores enum values as native PostgreSQL enum."""
     return Enum(
         enum_cls,
@@ -57,7 +60,7 @@ def str_enum(enum_cls, name):
     )
 
 
-class UserRole(str, enum.Enum):
+class UserRole(enum.StrEnum):
     """User roles for access control"""
 
     ADMIN = "admin"
@@ -65,7 +68,7 @@ class UserRole(str, enum.Enum):
     PENDING = "pending"
 
 
-class Permission(str, enum.Enum):
+class Permission(enum.StrEnum):
     """Permission constants for access control. Format: resource:action"""
 
     # Network permissions
@@ -86,7 +89,7 @@ class Permission(str, enum.Enum):
     USERS_MANAGE = "users:manage"
 
 
-class NetworkVisibility(str, enum.Enum):
+class NetworkVisibility(enum.StrEnum):
     """Network visibility options for access control"""
 
     PUBLIC = "public"
@@ -116,13 +119,13 @@ class User(Base):
         index=True,
     )
 
-    def update_last_login(self):
+    def update_last_login(self) -> None:
         """Update last login timestamp to current time"""
-        self.last_login = datetime.now(timezone.utc)
+        self.last_login = datetime.now(UTC)
 
     @property
     def permissions(self) -> list[str]:
-        from pypsa_app.backend.permissions import get_user_permissions
+        from pypsa_app.backend.permissions import get_user_permissions  # noqa: PLC0415
 
         return [p.value for p in get_user_permissions(self)]
 
@@ -197,7 +200,7 @@ class Network(Base):
         return tags if isinstance(tags, list) else None
 
 
-class RunStatus(str, enum.Enum):
+class RunStatus(enum.StrEnum):
     """Run status, mirrors smk-executor's JobStatus."""
 
     PENDING = "PENDING"

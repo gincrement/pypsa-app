@@ -1,4 +1,5 @@
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -13,9 +14,9 @@ from pypsa_app.backend.api.routes import (
     admin,
     auth,
     cache,
-    runs,
     networks,
     plots,
+    runs,
     statistics,
     tasks,
     version,
@@ -32,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Lifespan context manager for startup and shutdown events"""
     # Startup
     logger.info(
@@ -41,17 +42,7 @@ async def lifespan(app: FastAPI):
             "version": __version__,
             "api_prefix": API_V1_PREFIX,
             "backend_only": settings.backend_only,
-        },
-    )
-    logger.info(
-        "Networks path configured",
-        extra={
             "networks_path": str(settings.networks_path),
-        },
-    )
-    logger.debug(
-        "Database configuration",
-        extra={
             "database_url": settings.database_url,
         },
     )
@@ -59,36 +50,12 @@ async def lifespan(app: FastAPI):
     # Ensure networks directory exists
     settings.networks_path.mkdir(parents=True, exist_ok=True)
 
-    # Auto-create database tables if they don't exist
-    logger.info(
-        "Checking/creating database tables",
-        extra={
-            "database_url": settings.database_url,
-        },
-    )
+    # Auto-create database tables and verify connection
     Base.metadata.create_all(bind=engine)
-    logger.info(
-        "Database tables ready",
-        extra={
-            "database_url": settings.database_url,
-        },
-    )
-
-    logger.info(
-        "Testing database connection",
-        extra={
-            "database_url": settings.database_url,
-        },
-    )
     db = SessionLocal()
     try:
         db.execute(text("SELECT 1"))
-        logger.info(
-            "Database connection healthy",
-            extra={
-                "database_url": settings.database_url,
-            },
-        )
+        logger.info("Database ready")
     finally:
         db.close()
 
@@ -104,21 +71,25 @@ async def lifespan(app: FastAPI):
 
         # Verify required auth settings
         if not settings.github_client_id or not settings.github_client_secret:
-            raise RuntimeError(
-                "Authentication is enabled but GitHub OAuth credentials are not configured. "
-                "Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET environment variables."
+            msg = (
+                "Authentication is enabled but GitHub OAuth"
+                " credentials are not configured. "
+                "Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET"
+                " environment variables."
             )
+            raise RuntimeError(msg)
 
         # Verify Redis is available (required for session storage)
         if not cache_service.ping():
-            raise RuntimeError(
+            msg = (
                 "Authentication is enabled but Redis is not available. "
                 "Redis is required for session storage when authentication is enabled. "
                 "Set REDIS_URL environment variable and ensure Redis is running."
             )
+            raise RuntimeError(msg)
 
         # Initialize session store
-        from pypsa_app.backend.auth import session
+        from pypsa_app.backend.auth import session  # noqa: PLC0415
 
         session.session_store = session.SessionStore()
         logger.info(
@@ -133,7 +104,9 @@ async def lifespan(app: FastAPI):
     # Check smk-executor connectivity
     if settings.smk_executor_url:
         try:
-            from pypsa_app.backend.services.run import SmkExecutorClient
+            from pypsa_app.backend.services.run import (  # noqa: PLC0415
+                SmkExecutorClient,
+            )
 
             client = SmkExecutorClient(settings.smk_executor_url)
             health = client.health_check()
@@ -155,25 +128,9 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
-    logger.info(
-        "Shutting down PyPSA Web App API",
-        extra={
-            "version": __version__,
-        },
-    )
-    logger.info(
-        "Disposing database engine",
-        extra={
-            "database_url": settings.database_url,
-        },
-    )
+    logger.info("Shutting down PyPSA Web App API")
     engine.dispose()
-    logger.info(
-        "Shutdown complete",
-        extra={
-            "version": __version__,
-        },
-    )
+    logger.info("Shutdown complete")
 
 
 app = FastAPI(
@@ -211,11 +168,11 @@ if settings.backend_only:
 
 # Global exception handler
 @app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
+async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     if isinstance(exc, HTTPException):
-        raise
+        raise exc
 
-    logger.error(
+    logger.error(  # noqa: TRY400
         "Unexpected error",
         extra={
             "method": request.method,
@@ -258,7 +215,7 @@ app.include_router(runs.router, prefix=f"{API_V1_PREFIX}/runs", tags=["runs"])
 
 # Health check endpoint
 @app.get("/health")
-def health_check():
+def health_check() -> dict:
     health_status = {
         "status": "healthy",
         "version": __version__,
@@ -274,7 +231,7 @@ def health_check():
             health_status["cache"]["status"] = "unhealthy"
             health_status["status"] = "degraded"
     except Exception as e:
-        logger.error(
+        logger.exception(
             "Cache health check failed",
             extra={
                 "error": str(e),
@@ -289,7 +246,9 @@ def health_check():
     # Check smk-executor health
     if settings.smk_executor_url:
         try:
-            from pypsa_app.backend.services.run import SmkExecutorClient
+            from pypsa_app.backend.services.run import (  # noqa: PLC0415
+                SmkExecutorClient,
+            )
 
             client = SmkExecutorClient(settings.smk_executor_url)
             result = client.health_check()
@@ -305,8 +264,6 @@ def health_check():
 
 # Serve frontend static files (production mode)
 if not settings.backend_only:
-    from fastapi.staticfiles import StaticFiles
-
     from pypsa_app.backend.spa_static_files import SPAStaticFiles
 
     static_dir = Path(__file__).parent / "static"
@@ -336,7 +293,7 @@ if not settings.backend_only:
 else:
     # Development mode - API only
     @app.get("/")
-    def root():
+    def root() -> dict:
         return {
             "message": "PyPSA Web App API (dev mode)",
             "version": __version__,

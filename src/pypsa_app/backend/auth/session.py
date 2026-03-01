@@ -19,12 +19,11 @@ logger = logging.getLogger(__name__)
 class SessionStore:
     """Redis-based session storage for user authentication"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Redis connection for sessions"""
         if not REDIS_AVAILABLE:
-            raise RuntimeError(
-                "Redis is required for authentication but is not installed"
-            )
+            msg = "Redis is required for authentication but is not installed"
+            raise RuntimeError(msg)
 
         self.redis_client = redis.from_url(settings.redis_url, decode_responses=True)
         logger.info(
@@ -36,14 +35,14 @@ class SessionStore:
         )
 
     def create_session(self, user_id: UUID) -> str:
-        """
-        Create a new session for a user.
+        """Create a new session for a user.
 
         Args:
             user_id: UUID of the user
 
         Returns:
             session_id: Cryptographically secure random session ID
+
         """
         session_id = secrets.token_urlsafe(32)
         session_key = f"session:{session_id}"
@@ -62,14 +61,14 @@ class SessionStore:
         return session_id
 
     def get_session(self, session_id: str) -> UUID | None:
-        """
-        Get user_id from session_id.
+        """Get user_id from session_id.
 
         Args:
             session_id: Session identifier
 
         Returns:
             user_id: UUID of the user if session is valid, None otherwise
+
         """
         session_key = f"session:{session_id}"
         user_id_str = self.redis_client.get(session_key)
@@ -80,14 +79,14 @@ class SessionStore:
         return None
 
     def delete_session(self, session_id: str) -> bool:
-        """
-        Delete a session (logout).
+        """Delete a session (logout).
 
         Args:
             session_id: Session identifier
 
         Returns:
             True if session was deleted, False if it didn't exist
+
         """
         session_key = f"session:{session_id}"
         deleted = self.redis_client.delete(session_key)
@@ -101,14 +100,14 @@ class SessionStore:
         return deleted > 0
 
     def refresh_session(self, session_id: str) -> bool:
-        """
-        Refresh session TTL (extend expiry).
+        """Refresh session TTL (extend expiry).
 
         Args:
             session_id: Session identifier
 
         Returns:
             True if session was refreshed, False if it didn't exist
+
         """
         session_key = f"session:{session_id}"
 
@@ -141,7 +140,6 @@ session_store: SessionStore | None = None
 def get_session_store() -> SessionStore:
     """Get the global session store instance"""
     if session_store is None:
-        raise RuntimeError(
-            "Session store not initialized. Enable authentication in settings."
-        )
+        msg = "Session store not initialized. Enable authentication in settings."
+        raise RuntimeError(msg)
     return session_store

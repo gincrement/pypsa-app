@@ -121,9 +121,7 @@ def _run_to_response(run: Run) -> RunResponse:
         created_at=run.created_at,
         started_at=run.started_at,
         completed_at=run.completed_at,
-        owner=(
-            UserPublicResponse.model_validate(run.owner) if run.owner else None
-        ),
+        owner=(UserPublicResponse.model_validate(run.owner) if run.owner else None),
     )
 
 
@@ -133,7 +131,7 @@ def create_run(
     db: Session = Depends(get_db),
     user: User = Depends(require_permission(Permission.RUNS_CREATE)),
     smk_client: SmkExecutorClient = Depends(_get_smk_client),
-):
+) -> RunResponse:
     """Submit a new run."""
     payload = body.model_dump(exclude_none=True)
     result = smk_client.submit_job(payload)
@@ -175,13 +173,11 @@ def list_runs(
     db: Session = Depends(get_db),
     user: User = Depends(require_permission(Permission.RUNS_VIEW)),
     smk_client: SmkExecutorClient = Depends(_get_smk_client),
-):
+) -> RunListResponse:
     """List runs visible to the current user."""
     query = db.query(Run).options(joinedload(Run.owner))
     if settings.enable_auth and user is not None and user.role != UserRole.ADMIN:
-        query = query.filter(
-            (Run.user_id == user.id) | (Run.user_id.is_(None))
-        )
+        query = query.filter((Run.user_id == user.id) | (Run.user_id.is_(None)))
 
     total = query.count()
     runs = query.order_by(Run.created_at.desc()).offset(skip).limit(limit).all()
@@ -215,7 +211,7 @@ def get_run(
     db: Session = Depends(get_db),
     user: User = Depends(require_permission(Permission.RUNS_VIEW)),
     smk_client: SmkExecutorClient = Depends(_get_smk_client),
-):
+) -> RunResponse:
     """Get run detail."""
     run = _check_run_or_404(run_id, db, user)
 
@@ -226,7 +222,8 @@ def get_run(
             _sync_run_from_job(run, job, db)
             db.commit()
         except HTTPException:
-            # smk-executor unreachable or job already garbage collected, fall back to local DB
+            # smk-executor unreachable or job already garbage
+            # collected, fall back to local DB
             pass
 
     return _run_to_response(run)
@@ -238,7 +235,7 @@ def stream_run_logs(
     db: Session = Depends(get_db),
     user: User = Depends(require_permission(Permission.RUNS_VIEW)),
     smk_client: SmkExecutorClient = Depends(_get_smk_client),
-):
+) -> StreamingResponse:
     """Stream live logs via SSE."""
     _check_run_or_404(run_id, db, user)
     return StreamingResponse(
@@ -253,7 +250,7 @@ def list_run_outputs(
     db: Session = Depends(get_db),
     user: User = Depends(require_permission(Permission.RUNS_VIEW)),
     smk_client: SmkExecutorClient = Depends(_get_smk_client),
-):
+) -> list[dict]:
     """List output files for a completed run."""
     _check_run_or_404(run_id, db, user)
     return smk_client.get_job_outputs(str(run_id))
@@ -266,7 +263,7 @@ def download_run_output(
     db: Session = Depends(get_db),
     user: User = Depends(require_permission(Permission.RUNS_VIEW)),
     smk_client: SmkExecutorClient = Depends(_get_smk_client),
-):
+) -> StreamingResponse:
     """Download an output file."""
     _check_run_or_404(run_id, db, user)
     return StreamingResponse(
@@ -284,17 +281,9 @@ def cancel_run(
     db: Session = Depends(get_db),
     user: User = Depends(require_permission(Permission.RUNS_MODIFY)),
     smk_client: SmkExecutorClient = Depends(_get_smk_client),
-):
+) -> dict:
     """Cancel a running run. Keeps the record visible."""
-    run = (
-        db.query(Run)
-        .options(joinedload(Run.owner))
-        .filter(Run.job_id == run_id)
-        .first()
-    )
-    if not run:
-        raise HTTPException(404, "Run not found")
-
+    run = _check_run_or_404(run_id, db, user)
     if not _can_modify(user, run):
         raise HTTPException(403, "You don't have permission to cancel this run")
 
@@ -327,17 +316,9 @@ def remove_run(
     db: Session = Depends(get_db),
     user: User = Depends(require_permission(Permission.RUNS_MODIFY)),
     smk_client: SmkExecutorClient = Depends(_get_smk_client),
-):
+) -> dict:
     """Remove a run, cancel if still active, and delete the DB row."""
-    run = (
-        db.query(Run)
-        .options(joinedload(Run.owner))
-        .filter(Run.job_id == run_id)
-        .first()
-    )
-    if not run:
-        raise HTTPException(404, "Run not found")
-
+    run = _check_run_or_404(run_id, db, user)
     if not _can_modify(user, run):
         raise HTTPException(403, "You don't have permission to remove this run")
 

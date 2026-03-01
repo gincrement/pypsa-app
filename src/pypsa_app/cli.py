@@ -1,6 +1,4 @@
-"""
-Command-line interface for PyPSA App.
-"""
+"""Command-line interface for PyPSA App."""
 
 import os
 import sys
@@ -15,13 +13,12 @@ VERSION = version("pypsa-app")
 
 @click.group()
 @click.version_option(version=VERSION, prog_name="pypsa-app")
-def main():
+def main() -> None:
     """PyPSA Web Application - Visualize and analyze PyPSA network files."""
-    pass
 
 
 @main.command()
-@click.option("--host", default="0.0.0.0", help="Host to bind to", show_default=True)
+@click.option("--host", default="0.0.0.0", help="Host to bind to", show_default=True)  # noqa: S104
 @click.option(
     "--port", default=8000, type=int, help="Port to bind to", show_default=True
 )
@@ -37,9 +34,15 @@ def main():
 @click.option(
     "--database-url", help="Database URL (default: sqlite:///./data/pypsa-app.db)"
 )
-def serve(host, port, data_dir, dev, reload, database_url):
+def serve(
+    host: str,
+    port: int,
+    data_dir: Path | None,
+    dev: bool,
+    reload: bool,
+    database_url: str | None,
+) -> None:
     """Start the PyPSA web server."""
-
     # Set up environment
     if data_dir:
         os.environ["DATA_DIR"] = str(data_dir)
@@ -95,7 +98,7 @@ def serve(host, port, data_dir, dev, reload, database_url):
 
 
 @main.command()
-def info():
+def info() -> None:
     """Show information about the installation."""
     click.echo("PyPSA Web App - Installation Info")
     click.echo("=" * 60)
@@ -118,12 +121,14 @@ def info():
         click.echo("\nFrontends: Both built and ready")
     else:
         click.echo("\nFrontends:")
-        for (name, _), is_built in zip(frontends, built):
+        for (name, _), is_built in zip(frontends, built, strict=True):
             if is_built:
                 click.echo(f"   {name}: Built")
             else:
                 click.echo(
-                    f"   {name}: Not built (run: cd frontend/{name.lower()} && npm ci && npm run build)"
+                    f"   {name}: Not built"
+                    f" (run: cd frontend/{name.lower()}"
+                    " && npm ci && npm run build)"
                 )
 
     click.echo("\nEnvironment variables:")

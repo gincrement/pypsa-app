@@ -1,12 +1,13 @@
 """FastAPI dependencies"""
 
 import logging
-from typing import Generator
+from collections.abc import Awaitable, Callable, Generator
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, Path, Request
 from sqlalchemy.orm import Session
 
+from pypsa_app.backend.auth.session import get_session_store
 from pypsa_app.backend.database import SessionLocal
 from pypsa_app.backend.models import Network, Permission, User
 from pypsa_app.backend.permissions import can_access_network, has_permission
@@ -15,7 +16,7 @@ from pypsa_app.backend.settings import SESSION_COOKIE_NAME, settings
 logger = logging.getLogger(__name__)
 
 
-def get_db() -> Generator[Session, None, None]:
+def get_db() -> Generator[Session]:
     """FastAPI dependency for database sessions"""
     db = SessionLocal()
     try:
@@ -28,7 +29,7 @@ async def get_current_user_optional(
     request: Request,
     db: Session = Depends(get_db),
 ) -> User | None:
-    """Returns authenticated user or None. Never blocks requests."""
+    """Return authenticated user or None, never blocking requests."""
     if not settings.enable_auth:
         return None
 
@@ -39,8 +40,6 @@ async def get_current_user_optional(
         return None
 
     # Get user_id from session
-    from pypsa_app.backend.auth.session import get_session_store
-
     try:
         session_store = get_session_store()
         user_id = session_store.get_session(session_id)
@@ -53,24 +52,24 @@ async def get_current_user_optional(
         user = db.query(User).filter(User.id == user_id).first()
 
         if not user:
-            logger.warning(f"Session references non-existent user: {user_id}")
+            logger.warning("Session references non-existent user: %s", user_id)
             return None
 
-        logger.debug(f"User authenticated: {user.username} (role: {user.role})")
-        return user
-
     except (ConnectionError, OSError) as e:
-        logger.error(f"Session store connection error: {e}", exc_info=True)
+        logger.exception("Session store connection error")
         raise HTTPException(
             status_code=503,
             detail="Authentication service temporarily unavailable. Please try again.",
-        )
+        ) from e
+
+    logger.debug("User authenticated: %s (role: %s)", user.username, user.role)
+    return user
 
 
 async def get_current_user(
     user: User | None = Depends(get_current_user_optional),
 ) -> User:
-    """Requires authentication when enabled. Raises 401 if unauthenticated."""
+    """Require authentication when enabled, raising 401 if unauthenticated."""
     if settings.enable_auth and user is None:
         raise HTTPException(
             status_code=401,
@@ -80,7 +79,9 @@ async def get_current_user(
     return user
 
 
-def require_permission(permission: Permission):
+def require_permission(
+    permission: Permission,
+) -> Callable[..., Awaitable[User]]:
     """Require a specific permission for the endpoint."""
 
     async def checker(
@@ -112,7 +113,10 @@ def get_network_or_404(
     db: Session = Depends(get_db),
     user: User | None = Depends(get_current_user_optional),
 ) -> Network:
-    """Fetch network by ID with access control. Raises 404 if not found or inaccessible."""
+    """Fetch network by ID with access control.
+
+    Raises 404 if not found or inaccessible.
+    """
     network = db.query(Network).filter(Network.id == str(network_id)).first()
     if not network:
         raise HTTPException(404, "Network not found")

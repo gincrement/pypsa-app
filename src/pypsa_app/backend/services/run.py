@@ -1,7 +1,8 @@
 """HTTP client for the smk-executor service."""
 
 import logging
-from typing import Iterator
+from collections.abc import Iterator
+from http import HTTPStatus
 
 import httpx
 from fastapi import HTTPException
@@ -14,7 +15,7 @@ DEFAULT_TIMEOUT = 30.0
 class SmkExecutorClient:
     """Talks to smk-executor over HTTP using httpx."""
 
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str) -> None:
         self.base_url = base_url.rstrip("/")
 
     def _request(
@@ -28,14 +29,14 @@ class SmkExecutorClient:
         url = f"{self.base_url}{path}"
         try:
             response = httpx.request(method, url, json=json, timeout=timeout)
-        except httpx.ConnectError:
-            raise HTTPException(503, "smk-executor service is unreachable")
-        except httpx.TimeoutException:
-            raise HTTPException(504, "smk-executor request timed out")
+        except httpx.ConnectError as e:
+            raise HTTPException(503, "smk-executor service is unreachable") from e
+        except httpx.TimeoutException as e:
+            raise HTTPException(504, "smk-executor request timed out") from e
 
-        if response.status_code == 404:
-            raise HTTPException(404, "Job not found on smk-executor")
-        if response.status_code >= 400:
+        if response.status_code == HTTPStatus.NOT_FOUND:
+            raise HTTPException(HTTPStatus.NOT_FOUND, "Job not found on smk-executor")
+        if response.status_code >= HTTPStatus.BAD_REQUEST:
             detail = response.text[:500]
             raise HTTPException(502, f"smk-executor error: {detail}")
 
@@ -72,18 +73,16 @@ class SmkExecutorClient:
         """
         url = f"{self.base_url}{path}"
         try:
-            client = httpx.Client(timeout=None)
-            response = client.send(
-                client.build_request("GET", url), stream=True
-            )
-        except httpx.ConnectError:
-            raise HTTPException(503, "smk-executor service is unreachable")
+            client = httpx.Client(timeout=None)  # noqa: S113
+            response = client.send(client.build_request("GET", url), stream=True)
+        except httpx.ConnectError as e:
+            raise HTTPException(503, "smk-executor service is unreachable") from e
 
-        if response.status_code == 404:
+        if response.status_code == HTTPStatus.NOT_FOUND:
             response.close()
             client.close()
-            raise HTTPException(404, "Not found on smk-executor")
-        if response.status_code >= 400:
+            raise HTTPException(HTTPStatus.NOT_FOUND, "Not found on smk-executor")
+        if response.status_code >= HTTPStatus.BAD_REQUEST:
             response.close()
             client.close()
             raise HTTPException(502, "smk-executor streaming error")

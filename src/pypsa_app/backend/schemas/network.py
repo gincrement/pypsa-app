@@ -33,7 +33,7 @@ class NetworkResponse(BaseModel):
     visibility: NetworkVisibility = NetworkVisibility.PRIVATE
     owner: UserPublicResponse | None = None
 
-    # Model propertys
+    # Model properties
     tags: list[str | dict] | None = None
 
     model_config = {"from_attributes": True}

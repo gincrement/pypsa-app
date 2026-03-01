@@ -1,9 +1,10 @@
 """Shared utilities for task status responses"""
 
 import logging
+from collections.abc import Callable
 
-from pypsa_app.backend.task_queue import task_app
 from pypsa_app.backend.settings import API_V1_PREFIX
+from pypsa_app.backend.task_queue import task_app
 
 logger = logging.getLogger(__name__)
 
@@ -13,13 +14,13 @@ def get_task_status_response(task_id: str) -> dict:
     # Check if using Celery or in-memory queue
     try:
         # Try using Celery's AsyncResult if Celery is the backend
-        from celery.result import AsyncResult
+        from celery.result import AsyncResult  # noqa: PLC0415
 
         task = AsyncResult(task_id, app=task_app)
     except (ImportError, AttributeError) as e:
         # Fall back to in-memory AsyncResult
-        logger.warning(f"Celery unavailable, using in-memory task queue: {e}")
-        from pypsa_app.backend.task_queue import InMemoryAsyncResult
+        logger.warning("Celery unavailable, using in-memory task queue: %s", e)
+        from pypsa_app.backend.task_queue import InMemoryAsyncResult  # noqa: PLC0415
 
         task = InMemoryAsyncResult(task_id)
 
@@ -45,7 +46,7 @@ def get_task_status_response(task_id: str) -> dict:
     return response
 
 
-def queue_task(celery_task, *args, **kwargs) -> dict:
+def queue_task(celery_task: Callable, *args: object, **kwargs: object) -> dict:
     """Queue Celery task and return standard response."""
     task = celery_task.apply_async(args=args, kwargs=kwargs)
     logger.debug(

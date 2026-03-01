@@ -1,8 +1,7 @@
-"""
-Version information endpoints
-"""
+"""Version information endpoints"""
 
 import json
+import logging
 from pathlib import Path
 
 import pypsa
@@ -18,18 +17,17 @@ def get_frontend_version(package_json_path: Path) -> str:
     """Read version from a package.json file"""
     try:
         if package_json_path.exists():
-            with open(package_json_path) as f:
+            with package_json_path.open() as f:
                 data = json.load(f)
                 return data.get("version", "unknown")
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001
+        logging.getLogger(__name__).debug("Failed to read %s", package_json_path)
     return "unknown"
 
 
 @router.get("/", response_model=VersionResponse)
-async def get_version():
+async def get_version() -> dict:
     """Get PyPSA and application version information"""
-
     # Read frontend versions from package.json files
     project_root = Path(__file__).parent.parent.parent.parent.parent.parent
     app_package_path = project_root / "frontend" / "app" / "package.json"

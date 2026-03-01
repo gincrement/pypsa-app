@@ -13,9 +13,8 @@ router = APIRouter()
 
 
 @router.get("/status/{task_id}", response_model=TaskStatusResponse)
-def get_task_status(task_id: UUID, user: User = Depends(get_current_user)):
-    """
-    Get status of any background Celery task.
+def get_task_status(task_id: UUID, user: User = Depends(get_current_user)) -> dict:
+    """Get status of any background Celery task.
 
     States:
     - PENDING: Task is waiting to be processed

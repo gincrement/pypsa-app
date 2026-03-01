@@ -11,9 +11,8 @@ class PlotRequest(StatisticsRequest):
 
     @field_validator("plot_type")
     @classmethod
-    def validate_plot_type(cls, v):
+    def validate_plot_type(cls, v: str) -> str:
         if v not in ALLOWED_CHART_TYPES:
-            raise ValueError(
-                f"Invalid plot_type '{v}'. Allowed: {sorted(ALLOWED_CHART_TYPES)}"
-            )
+            msg = f"Invalid plot_type '{v}'. Allowed: {sorted(ALLOWED_CHART_TYPES)}"
+            raise ValueError(msg)
         return v

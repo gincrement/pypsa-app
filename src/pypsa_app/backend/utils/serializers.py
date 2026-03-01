@@ -1,12 +1,12 @@
 """Serialization utilities for converting data structures to JSON"""
 
 import math
-from typing import Union
+from typing import Any
 
 import pandas as pd
 
 
-def serialize_df(data: Union[pd.DataFrame, pd.Series]) -> dict:
+def serialize_df(data: pd.DataFrame | pd.Series) -> dict:
     """Convert pandas DataFrame or Series to JSON-serializable dict"""
     if isinstance(data, pd.DataFrame):
         result = data.to_dict(orient="split")
@@ -23,10 +23,11 @@ def serialize_df(data: Union[pd.DataFrame, pd.Series]) -> dict:
     elif isinstance(data, pd.Series):
         return {str(k): v for k, v in data.to_dict().items()}
     else:
-        raise ValueError(f"Expected DataFrame or Series, got {type(data)}")
+        msg = f"Expected DataFrame or Series, got {type(data)}"
+        raise TypeError(msg)
 
 
-def sanitize_metadata(data):
+def sanitize_metadata(data: Any) -> Any:
     """Recursively sanitize metadata to be JSON-compatible (removes inf/nan)"""
     if isinstance(data, dict):
         return {k: sanitize_metadata(v) for k, v in data.items()}

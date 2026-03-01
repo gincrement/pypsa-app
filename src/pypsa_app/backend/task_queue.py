@@ -3,8 +3,10 @@
 import logging
 import threading
 import uuid
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from pypsa_app.backend.settings import settings
 
@@ -16,22 +18,22 @@ _pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="task")
 
 
 class InMemoryAsyncResult:
-    def __init__(self, task_id):
+    def __init__(self, task_id: str) -> None:
         self.id = task_id
 
     @property
-    def state(self):
+    def state(self) -> str:
         with _lock:
             return _tasks.get(self.id, {}).get("state", "PENDING")
 
     @property
-    def result(self):
+    def result(self) -> Any:
         with _lock:
             t = _tasks.get(self.id, {})
             return t.get("result") if t.get("state") == "SUCCESS" else None
 
     @property
-    def info(self):
+    def info(self) -> Any:
         with _lock:
             t = _tasks.get(self.id, {})
             if t.get("state") == "FAILURE":
@@ -42,13 +44,15 @@ class InMemoryAsyncResult:
 
 
 class InMemoryTaskQueue:
-    def task(self, *args, **kwargs):
+    def task(self, *args: Any, **kwargs: Any) -> Callable:
         bind = kwargs.get("bind", False)
 
-        def decorator(func):
-            def apply_async(args=(), kwargs=None, **options):
+        def _decorator(func: Callable) -> Callable:
+            def apply_async(
+                args: tuple = (), kwargs: dict | None = None, **options: Any
+            ) -> InMemoryAsyncResult:
                 tid = str(uuid.uuid4())
-                now = datetime.now(timezone.utc)
+                now = datetime.now(UTC)
 
                 with _lock:
                     _tasks[tid] = {"state": "PENDING", "created_at": now}
@@ -61,14 +65,16 @@ class InMemoryTaskQueue:
                     request = type("Request", (), {"id": tid})()
 
                     @staticmethod
-                    def update_state(state=None, meta=None):
+                    def update_state(
+                        state: str | None = None, meta: dict | None = None
+                    ) -> None:
                         with _lock:
                             if tid in _tasks and state:
                                 _tasks[tid]["state"] = state
                             if tid in _tasks and meta:
                                 _tasks[tid]["meta"] = meta
 
-                def run():
+                def run() -> None:
                     try:
                         res = (
                             func(Task(), *args, **(kwargs or {}))
@@ -82,10 +88,9 @@ class InMemoryTaskQueue:
                             _tasks[tid].update(
                                 {"state": "FAILURE", "exception": str(e)}
                             )
-                        logger.error(
+                        logger.exception(
                             "Task failed",
                             extra={"task_id": tid, "error": str(e)},
-                            exc_info=True,
                         )
 
                 _pool.submit(run)
@@ -95,7 +100,7 @@ class InMemoryTaskQueue:
             func.name = kwargs.get("name", func.__name__)
             return func
 
-        return decorator
+        return _decorator
 
 
 # Try to use Celery with Redis, fall back to in-memory task queue

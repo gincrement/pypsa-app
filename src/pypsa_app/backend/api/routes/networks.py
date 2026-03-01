@@ -3,7 +3,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import Path as PathParam
-from sqlalchemy import or_
+from sqlalchemy import ColumnElement, or_
 from sqlalchemy.orm import Session, joinedload
 
 from pypsa_app.backend.api.deps import get_db, get_network_or_404, require_permission
@@ -28,7 +28,9 @@ logger = logging.getLogger(__name__)
 
 
 @router.put("/", response_model=TaskQueuedResponse)
-def scan_networks(user: User = Depends(require_permission(Permission.NETWORKS_SCAN))):
+def scan_networks(
+    user: User = Depends(require_permission(Permission.NETWORKS_SCAN)),
+) -> dict:
     """Scan file system for network files and update database"""
     return queue_task(scan_networks_task, networks_path=str(settings.networks_path))
 
@@ -39,11 +41,14 @@ def list_networks(
     limit: int = 100,
     owners: list[str] | None = Query(
         None,
-        description="Filter by owner IDs. Use 'system' for networks without owner, 'me' for current user.",
+        description=(
+            "Filter by owner IDs. Use 'system' for networks"
+            " without owner, 'me' for current user."
+        ),
     ),
     db: Session = Depends(get_db),
     user: User = Depends(require_permission(Permission.NETWORKS_VIEW)),
-):
+) -> NetworkListResponse:
     """List networks with pagination and optional filtering."""
     query = db.query(Network).options(joinedload(Network.owner))
 
@@ -60,7 +65,7 @@ def list_networks(
         # Apply owner filter if specified
         if owners:
 
-            def owner_to_condition(owner_id: str):
+            def owner_to_condition(owner_id: str) -> ColumnElement[bool]:
                 if owner_id == "system":
                     return Network.user_id == None  # noqa: E711
                 if owner_id == "me":
@@ -99,7 +104,7 @@ def get_network(
     network_id: UUID = PathParam(..., description="Network UUID"),
     db: Session = Depends(get_db),
     user: User = Depends(require_permission(Permission.NETWORKS_VIEW)),
-):
+) -> Network:
     """Get network by ID with owner info"""
     network = (
         db.query(Network)
@@ -123,7 +128,7 @@ def update_network(
     body: NetworkUpdate = ...,
     db: Session = Depends(get_db),
     user: User = Depends(require_permission(Permission.NETWORKS_UPDATE)),
-):
+) -> Network:
     """Update network properties. Only owner or admin can update."""
     network = (
         db.query(Network)
@@ -162,7 +167,7 @@ def delete_network(
     network: Network = Depends(get_network_or_404),
     db: Session = Depends(get_db),
     user: User = Depends(require_permission(Permission.NETWORKS_DELETE)),
-):
+) -> dict:
     """Delete network from database and file system"""
     if settings.enable_auth and not can_modify_network(user, network):
         raise HTTPException(403, "You don't have permission to delete this network")

@@ -14,7 +14,7 @@ services:
     # ports:
     #   - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+    - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
@@ -40,22 +40,22 @@ services:
     container_name: pypsa-app
     restart: unless-stopped
     ports:
-      - "${APP_PORT:-8000}:8000"
+    - "${APP_PORT:-8000}:8000"
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB}
-      - REDIS_URL=redis://redis:6379/0
+    - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB}
+    - REDIS_URL=redis://redis:6379/0
       # Authentication
-      - ENABLE_AUTH=${ENABLE_AUTH}
-      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
-      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
-      - SESSION_SECRET_KEY=${SESSION_SECRET_KEY}
-      - SESSION_COOKIE_NAME=${SESSION_COOKIE_NAME}
-      - SESSION_TTL=${SESSION_TTL:-604800}
-      - BASE_URL=${BASE_URL}
+    - ENABLE_AUTH=${ENABLE_AUTH}
+    - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+    - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+    - SESSION_SECRET_KEY=${SESSION_SECRET_KEY}
+    - SESSION_COOKIE_NAME=${SESSION_COOKIE_NAME}
+    - SESSION_TTL=${SESSION_TTL:-604800}
+    - BASE_URL=${BASE_URL}
       # Executions
-      - SMK_EXECUTOR_URL=${SMK_EXECUTOR_URL:-}
+    - SMK_EXECUTOR_URL=${SMK_EXECUTOR_URL:-}
     volumes:
-      - ../data:/app/data
+    - ../data:/app/data
     depends_on:
       postgres:
         condition: service_healthy
@@ -66,20 +66,12 @@ services:
     image: ghcr.io/pypsa/pypsa-app:latest
     container_name: pypsa-celery-worker
     restart: unless-stopped
-    command:
-      [
-        "celery",
-        "-A",
-        "pypsa_app.backend.task_queue.task_app",
-        "worker",
-        "--loglevel=${CELERY_LOGLEVEL:-info}",
-        "--concurrency=${CELERY_CONCURRENCY:-4}",
-      ]
+    command: ["celery", "-A", "pypsa_app.backend.task_queue.task_app", "worker", "--loglevel=${CELERY_LOGLEVEL:-info}", "--concurrency=${CELERY_CONCURRENCY:-4}"]
     environment:
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB}
-      - REDIS_URL=redis://redis:6379/0
+    - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB}
+    - REDIS_URL=redis://redis:6379/0
     volumes:
-      - ../data:/app/data
+    - ../data:/app/data
     depends_on:
       postgres:
         condition: service_healthy

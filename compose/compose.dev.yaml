@@ -15,7 +15,7 @@ services:
     # ports:
     #   - "${POSTGRES_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+    - postgres_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
@@ -45,7 +45,7 @@ services:
     container_name: pypsa-app
     restart: unless-stopped
     ports:
-      - "${APP_PORT:-8000}:8000"
+    - "${APP_PORT:-8000}:8000"
     env_file: .env.dev
     environment:
       # These use docker network hostnames, so we construct them here
@@ -53,9 +53,9 @@ services:
       REDIS_URL: redis://redis:6379/0
       DEBUG: true
     volumes:
-      - ../src:/app/src
-      - ../data:/data
-      - ../frontend/app/package.json:/app/frontend/app/package.json:ro
+    - ../src:/app/src
+    - ../data:/data
+    - ../frontend/app/package.json:/app/frontend/app/package.json:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -74,18 +74,10 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       REDIS_URL: redis://redis:6379/0
-    command:
-      [
-        "celery",
-        "-A",
-        "pypsa_app.backend.task_queue.task_app",
-        "worker",
-        "--loglevel=${CELERY_LOGLEVEL:-info}",
-        "--concurrency=${CELERY_CONCURRENCY:-2}",
-      ]
+    command: ["celery", "-A", "pypsa_app.backend.task_queue.task_app", "worker", "--loglevel=${CELERY_LOGLEVEL:-info}", "--concurrency=${CELERY_CONCURRENCY:-2}"]
     volumes:
-      - ../src:/app/src
-      - ../data:/data
+    - ../src:/app/src
+    - ../data:/data
     depends_on:
       postgres:
         condition: service_healthy

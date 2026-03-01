@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("/redis/stats", response_model=RedisStatsResponse)
-def get_redis_stats(user: User = Depends(get_current_user)):
+def get_redis_stats(user: User = Depends(get_current_user)) -> dict:
     """Get Redis cache statistics"""
     stats = {
         "available": cache_service.ping(),
@@ -44,40 +44,42 @@ def get_redis_stats(user: User = Depends(get_current_user)):
 
 
 @router.get("/networks/stats", response_model=NetworkCacheStatsResponse)
-def get_network_cache_stats(user: User = Depends(get_current_user)):
+def get_network_cache_stats(user: User = Depends(get_current_user)) -> dict:
     """Get in-memory PyPSA network cache statistics"""
-
     return _network_cache.stats()
 
 
 @router.delete("/redis/plots", response_model=ClearCacheResponse)
-def clear_plot_cache(user: User = Depends(get_current_user)):
+def clear_plot_cache(user: User = Depends(get_current_user)) -> dict:
     """Clear all plot caches"""
     deleted_count = cache_service.clear_plot_cache()
     return {"message": "Cleared all plot caches", "deleted_keys": deleted_count}
 
 
 @router.delete("/redis/{network_id}", response_model=ClearCacheResponse)
-def clear_redis_for_network(network_id: str, user: User = Depends(get_current_user)):
+def clear_redis_for_network(
+    network_id: str, user: User = Depends(get_current_user)
+) -> dict:
     """Clear Redis cache for a specific network"""
     deleted_count = cache_service.clear_network_cache(network_id)
     return {
-        "message": f"Cleared Redis cache for network {network_id} (including all plots)",
+        "message": (
+            f"Cleared Redis cache for network {network_id} (including all plots)"
+        ),
         "deleted_keys": deleted_count,
     }
 
 
 @router.delete("/redis", response_model=ClearCacheResponse)
-def clear_redis_cache(user: User = Depends(get_current_user)):
+def clear_redis_cache(user: User = Depends(get_current_user)) -> dict:
     """Clear all Redis cache"""
     deleted_count = cache_service.clear_all_cache()
     return {"message": "Cleared all Redis cache", "deleted_keys": deleted_count}
 
 
 @router.delete("/networks", response_model=MessageResponse)
-def clear_network_cache(user: User = Depends(get_current_user)):
+def clear_network_cache(user: User = Depends(get_current_user)) -> dict:
     """Clear in-memory PyPSA network cache"""
-
     _network_cache.clear()
     logger.info(
         "PyPSA network cache cleared",

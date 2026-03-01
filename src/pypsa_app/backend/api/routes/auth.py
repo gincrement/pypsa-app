@@ -1,7 +1,7 @@
 """Authentication routes for GitHub OAuth"""
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from authlib.integrations.starlette_client import OAuth, OAuthError
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -22,7 +22,7 @@ oauth.register(
     name="github",
     client_id=settings.github_client_id,
     client_secret=settings.github_client_secret,
-    access_token_url="https://github.com/login/oauth/access_token",
+    access_token_url="https://github.com/login/oauth/access_token",  # noqa: S106
     authorize_url="https://github.com/login/oauth/authorize",
     api_base_url="https://api.github.com/",
     client_kwargs={"scope": "user:email"},
@@ -30,7 +30,7 @@ oauth.register(
 
 
 @router.get("/login")
-async def login(request: Request):
+async def login(request: Request) -> RedirectResponse:
     """Redirect to GitHub OAuth login"""
     if not settings.enable_auth:
         raise HTTPException(status_code=400, detail="Authentication is disabled")
@@ -41,7 +41,7 @@ async def login(request: Request):
 
 
 @router.get("/callback")
-async def callback(request: Request, db: Session = Depends(get_db)):
+async def callback(request: Request, db: Session = Depends(get_db)) -> RedirectResponse:
     """Handle GitHub OAuth callback"""
     if not settings.enable_auth:
         raise HTTPException(status_code=400, detail="Authentication is disabled")
@@ -51,8 +51,8 @@ async def callback(request: Request, db: Session = Depends(get_db)):
         token = await oauth.github.authorize_access_token(request)
     except OAuthError as e:
         client_ip = request.client.host if request.client else "unknown"
-        logger.warning(f"OAuth error (possible CSRF): {e}, client_ip={client_ip}")
-        raise HTTPException(status_code=400, detail="Authentication failed")
+        logger.warning("OAuth error (possible CSRF): %s, client_ip=%s", e, client_ip)
+        raise HTTPException(status_code=400, detail="Authentication failed") from e
 
     try:
         # Get user info from GitHub
@@ -79,7 +79,7 @@ async def callback(request: Request, db: Session = Depends(get_db)):
             # Existing user - just update last_login (profile stays unchanged)
             user = db.query(User).filter(User.id == oauth_link.user_id).first()
             user.update_last_login()
-            logger.info(f"User logged in: {user.username} (role: {user.role})")
+            logger.info("User logged in: %s (role: %s)", user.username, user.role)
         else:
             # New user - first user becomes admin, others are pending
             existing_user = db.query(User).limit(1).first()
@@ -87,7 +87,7 @@ async def callback(request: Request, db: Session = Depends(get_db)):
 
             if is_first_user:
                 role = UserRole.ADMIN
-                logger.warning(f"First user {github_user['login']} promoted to admin.")
+                logger.warning("First user %s promoted to admin.", github_user["login"])
             else:
                 role = UserRole.PENDING
 
@@ -95,7 +95,7 @@ async def callback(request: Request, db: Session = Depends(get_db)):
                 username=github_user["login"],
                 email=primary_email,
                 avatar_url=github_user.get("avatar_url"),
-                last_login=datetime.now(timezone.utc),
+                last_login=datetime.now(UTC),
                 role=role,
             )
             db.add(user)
@@ -107,7 +107,7 @@ async def callback(request: Request, db: Session = Depends(get_db)):
                 provider_id=provider_id,
             )
             db.add(oauth_link)
-            logger.info(f"New user registered: {user.username} (role: {user.role})")
+            logger.info("New user registered: %s (role: %s)", user.username, user.role)
 
         db.commit()
         db.refresh(user)
@@ -132,15 +132,15 @@ async def callback(request: Request, db: Session = Depends(get_db)):
             max_age=settings.session_ttl,
         )
 
-        return response
-
     except Exception as e:
-        logger.error(f"OAuth callback error: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail="Authentication failed")
+        logger.exception("OAuth callback error")
+        raise HTTPException(status_code=500, detail="Authentication failed") from e
+    else:
+        return response
 
 
 @router.get("/logout")
-async def logout(request: Request):
+async def logout(request: Request) -> RedirectResponse:
     """Logout and delete session"""
     if not settings.enable_auth:
         raise HTTPException(status_code=400, detail="Authentication is disabled")
@@ -159,7 +159,7 @@ async def logout(request: Request):
 
 
 @router.get("/me", response_model=UserResponse)
-async def get_current_user_info(user: User = Depends(get_current_user)):
+async def get_current_user_info(user: User = Depends(get_current_user)) -> User:
     """Get current authenticated user information"""
     if not settings.enable_auth:
         raise HTTPException(status_code=400, detail="Authentication is disabled")

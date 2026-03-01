@@ -3,8 +3,9 @@
 import hashlib
 import json
 import logging
+from collections.abc import Callable
 from functools import wraps
-from typing import Callable
+from typing import Any
 
 from pypsa_app.backend.settings import settings
 
@@ -18,26 +19,26 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 
-def cache(key_template: str, ttl: int):
-    """
-    Cache decorator for FastAPI endpoints.
+def cache(key_template: str, ttl: int) -> Callable:
+    """Cache decorator for FastAPI endpoints.
 
     Args:
         key_template: Template string with {param_name} placeholders
                      Example: "map_buses:{network_id}"
                      For Pydantic models, use fields: "plot:{request.statistic}"
         ttl: Time to live in seconds
+
     """
 
     def decorator(func: Callable) -> Callable:
-        import inspect
+        import inspect  # noqa: PLC0415
 
         param_names = list(inspect.signature(func).parameters.keys())
 
         @wraps(func)
-        def wrapper(*args, **kwargs):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
             # Zip args to param names
-            values = dict(zip(param_names, args))
+            values = dict(zip(param_names, args, strict=False))
             values.update(kwargs)
 
             # Simple approach: serialize all values and hash
@@ -49,10 +50,10 @@ def cache(key_template: str, ttl: int):
                     serializable[key] = value
 
             # Generate cache key by hashing all parameters
-            cache_hash = hashlib.md5(
+            cache_hash = hashlib.md5(  # noqa: S324
                 json.dumps(serializable, sort_keys=True).encode()
             ).hexdigest()[:12]
-            cache_key = f"{key_template.split(':')[0]}:{cache_hash}"
+            cache_key = f"{key_template.split(':', maxsplit=1)[0]}:{cache_hash}"
 
             # Check cache
             cached_data = cache_service.get(cache_key)
@@ -75,7 +76,7 @@ def cache(key_template: str, ttl: int):
 class CacheService:
     """Generic Redis cache service"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """Initialize Redis connection"""
         self.redis_client = redis.from_url(settings.redis_url, decode_responses=True)
         logger.info(
@@ -101,7 +102,8 @@ class CacheService:
 
         self.redis_client.setex(key, ttl, serialized)
         logger.info(
-            f"Cached data ({round(size_mb, 2)} MB)",
+            "Cached data (%.2f MB)",
+            size_mb,
             extra={
                 "cache_key": key,
                 "ttl": ttl,
@@ -110,59 +112,27 @@ class CacheService:
         )
         return True
 
+    def _clear_by_pattern(self, pattern: str) -> int:
+        """Delete all keys matching a pattern and return the count."""
+        deleted = 0
+        for key in self.redis_client.scan_iter(match=pattern):
+            self.redis_client.delete(key)
+            deleted += 1
+        if deleted > 0:
+            logger.info("Cleared %d cache entries matching '%s'", deleted, pattern)
+        return deleted
+
     def clear_plot_cache(self) -> int:
         """Clear all plot caches"""
-        deleted = 0
-        for key in self.redis_client.scan_iter(match="plot:*"):
-            self.redis_client.delete(key)
-            deleted += 1
-        if deleted > 0:
-            logger.info(
-                "Cleared plot cache entries",
-                extra={
-                    "deleted_count": deleted,
-                    "cache_type": "plot",
-                    "pattern": "plot:*",
-                },
-            )
-        return deleted
+        return self._clear_by_pattern("plot:*")
 
     def clear_network_cache(self, network_id: str) -> int:
-        """Clear all cached data for a specific network"""
-        deleted = 0
-
-        # Clear all plot caches (plots can involve multiple networks)
-        plot_pattern = "plot:*"
-        for key in self.redis_client.scan_iter(match=plot_pattern):
-            self.redis_client.delete(key)
-            deleted += 1
-
-        if deleted > 0:
-            logger.info(
-                "Cleared cache entries for network",
-                extra={
-                    "network_id": network_id,
-                    "deleted_count": deleted,
-                    "plot_pattern": plot_pattern,
-                },
-            )
-        return deleted
+        """Clear all cached data for a specific network (clears all plots)"""
+        return self._clear_by_pattern("plot:*")
 
     def clear_all_cache(self) -> int:
         """Clear all cached data"""
-        deleted = 0
-        for key in self.redis_client.scan_iter(match="*"):
-            self.redis_client.delete(key)
-            deleted += 1
-        if deleted > 0:
-            logger.info(
-                "Cleared total cache entries",
-                extra={
-                    "deleted_count": deleted,
-                    "pattern": "*",
-                },
-            )
-        return deleted
+        return self._clear_by_pattern("*")
 
     def ping(self) -> bool:
         """Check if Redis is accessible"""
@@ -172,7 +142,7 @@ class CacheService:
 class DummyCacheService:
     """Dummy cache service when Redis is not available"""
 
-    def __init__(self):
+    def __init__(self) -> None:
         logger.warning(
             "Redis not available - using dummy cache",
             extra={
@@ -181,22 +151,22 @@ class DummyCacheService:
             },
         )
 
-    def get(self, *args, **kwargs):
+    def get(self, *args: Any, **kwargs: Any) -> None:
         return None
 
-    def set(self, *args, **kwargs):
+    def set(self, *args: Any, **kwargs: Any) -> bool:
         return False
 
-    def clear_plot_cache(self):
+    def clear_plot_cache(self) -> int:
         return 0
 
-    def clear_network_cache(self, *args, **kwargs):
+    def clear_network_cache(self, *args: Any, **kwargs: Any) -> int:
         return 0
 
-    def clear_all_cache(self):
+    def clear_all_cache(self) -> int:
         return 0
 
-    def ping(self):
+    def ping(self) -> bool:
         return False
 
 
@@ -205,7 +175,7 @@ if REDIS_AVAILABLE and settings.redis_url:
     try:
         cache_service = CacheService()
     except Exception as e:
-        logger.error(
+        logger.exception(
             "Failed to initialize Redis cache",
             extra={
                 "error": str(e),
@@ -213,7 +183,6 @@ if REDIS_AVAILABLE and settings.redis_url:
                 "redis_url": settings.redis_url,
                 "fallback": "DummyCacheService",
             },
-            exc_info=True,
         )
         cache_service = DummyCacheService()
 else:

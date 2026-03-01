@@ -1,6 +1,4 @@
-"""
-PyPSA Web App - A web application for visualizing and analyzing PyPSA network files.
-"""
+"""PyPSA App"""
 
 __version__ = "0.1.0"
 

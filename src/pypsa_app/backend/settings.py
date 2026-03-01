@@ -1,6 +1,7 @@
 """Application configuration using environment variables"""
 
 from pathlib import Path
+from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -31,7 +32,9 @@ class Settings(BaseSettings):
     )
     data_dir: str = Field(
         default="./data",
-        description="File storage directory to store application data and network files",
+        description=(
+            "File storage directory to store application data and network files"
+        ),
         json_schema_extra={"category": "Application"},
     )
 
@@ -70,7 +73,9 @@ class Settings(BaseSettings):
     )
     session_secret_key: str = Field(
         default="dev-secret-key-change-in-production",
-        description="Secret key for session cookies (generate with: openssl rand -base64 32)",
+        description=(
+            "Secret key for session cookies (generate with: openssl rand -base64 32)"
+        ),
         json_schema_extra={"category": "Authentication", "depends_on": "enable_auth"},
     )
     session_ttl: int = Field(
@@ -116,26 +121,29 @@ class Settings(BaseSettings):
     )
     cors_origins: str = Field(
         default="http://localhost:5173,http://localhost:5174",
-        description="Comma-separated list of allowed CORS origins (only used in backend-only mode)",
+        description=(
+            "Comma-separated list of allowed CORS origins"
+            " (only used in backend-only mode)"
+        ),
         json_schema_extra={"category": "Development", "depends_on": "backend_only"},
     )
 
     @model_validator(mode="after")
-    def validate_auth_settings(self):
+    def validate_auth_settings(self) -> Self:
         if self.enable_auth and self.database_url.startswith("sqlite"):
-            raise ValueError(
+            msg = (
                 "Authentication requires PostgreSQL. "
                 "SQLite does not support the features needed for multi-user auth. "
                 "Either set ENABLE_AUTH=false or use a PostgreSQL DATABASE_URL."
             )
+            raise ValueError(msg)
 
         if (
             self.enable_auth
-            and self.session_secret_key == "dev-secret-key-change-in-production"
+            and self.session_secret_key == "dev-secret-key-change-in-production"  # noqa: S105
         ):
-            raise ValueError(
-                "Must set a secure SESSION_SECRET_KEY when authentication is enabled"
-            )
+            msg = "Must set a secure SESSION_SECRET_KEY when authentication is enabled"
+            raise ValueError(msg)
         return self
 
 
