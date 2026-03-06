@@ -1,13 +1,19 @@
 """Celery tasks for long-running PyPSA operations"""
 
 import logging
+import os
+import tempfile
 from collections.abc import Callable
 from datetime import UTC, datetime
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from pypsa_app.backend.cache import cache
+from pypsa_app.backend.database import SessionLocal
+from pypsa_app.backend.models import Run, RunStatus
 from pypsa_app.backend.schemas.task import TaskResultResponse
-from pypsa_app.backend.services.network import scan_networks
+from pypsa_app.backend.services.network import import_network_file
+from pypsa_app.backend.services.run import SmkExecutorClient
 from pypsa_app.backend.services.statistics import get_plot as get_plot_service
 from pypsa_app.backend.services.statistics import (
     get_statistics as get_statistics_service,
@@ -62,7 +68,70 @@ def get_plot_task(self: Any, **kwargs: Any) -> dict[str, Any]:
     return _execute_task(self, "Plot generation", func, **kwargs)
 
 
-@task_app.task(bind=True, name="tasks.scan_networks")
-def scan_networks_task(self: Any, **kwargs: Any) -> dict[str, Any]:
-    """Background task for network scanning (no caching)"""
-    return _execute_task(self, "Network scan", scan_networks, **kwargs)
+@task_app.task(bind=True, name="tasks.import_run_outputs")
+def import_run_outputs_task(self: Any, job_id: str) -> None:
+    """Download .nc outputs from a completed run and import as networks."""
+    db = SessionLocal()
+    try:
+        run = db.query(Run).filter(Run.job_id == job_id).first()
+        if not run or run.status != RunStatus.UPLOADING:
+            return
+
+        smk_client = SmkExecutorClient(settings.smk_executor_url)
+        wanted_set = set(run.import_networks or [])
+
+        outputs = smk_client.get_job_outputs(job_id)
+        nc_outputs = [
+            o
+            for o in outputs
+            if str(o.get("path", "")).endswith(".nc")
+            and str(o.get("path", "")) in wanted_set
+        ]
+
+        # If any import fails, rollback undoes all and run is marked ERROR.
+        for output in nc_outputs:
+            output_path = output["path"]
+            fd, tmp_str = tempfile.mkstemp(suffix=".nc")
+            os.close(fd)
+            tmp = Path(tmp_str)
+            try:
+                smk_client.download_job_output_to_file(job_id, output_path, tmp)
+                filename = PurePosixPath(output_path).name
+                network = import_network_file(
+                    tmp, filename, run.user_id, db, source_run_id=run.job_id
+                )
+                logger.info(
+                    "Imported network from run output",
+                    extra={
+                        "run_id": job_id,
+                        "output_path": output_path,
+                        "network_id": str(network.id),
+                    },
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to import run output",
+                    extra={"run_id": job_id, "output_path": output_path},
+                )
+                db.rollback()
+                run = db.query(Run).filter(Run.job_id == job_id).first()
+                if run:
+                    run.status = RunStatus.ERROR
+                    db.commit()
+                return
+            finally:
+                tmp.unlink(missing_ok=True)
+
+        run.status = RunStatus.COMPLETED
+        db.commit()
+    except Exception:
+        logger.exception("Import task failed", extra={"run_id": job_id})
+        try:
+            run = db.query(Run).filter(Run.job_id == job_id).first()
+            if run:
+                run.status = RunStatus.ERROR
+                db.commit()
+        except Exception:
+            logger.exception("Failed to mark run as ERROR", extra={"run_id": job_id})
+    finally:
+        db.close()

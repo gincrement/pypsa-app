@@ -1,42 +1,53 @@
 <script lang="ts">
-	import { Upload, Globe, FileUp } from 'lucide-svelte';
+	import { Upload, LoaderCircle } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui/button';
-	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import { networks } from '$lib/api/client.js';
 
 	interface UploadButtonProps {
 		variant?: 'default' | 'link' | 'destructive' | 'secondary' | 'outline' | 'ghost';
 		size?: 'default' | 'sm' | 'lg' | 'icon' | 'icon-sm' | 'icon-lg';
 		label?: string;
+		onUpload?: () => void;
+		onError?: (message: string) => void;
 	}
 
-	let { variant = 'default', size = 'sm', label = 'Upload' }: UploadButtonProps = $props();
+	let { variant = 'default', size = 'sm', label = 'Upload', onUpload, onError }: UploadButtonProps = $props();
 
-	function handleUploadFromUrl() {
-		alert('Upload from URL - Coming soon!');
-	}
+	let uploading = $state(false);
+	let fileInput: HTMLInputElement;
 
-	function handleUploadFromLocal() {
-		alert('Upload from local file - Coming soon!');
+	async function handleFileSelected(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+
+		uploading = true;
+		try {
+			await networks.upload(file);
+			onUpload?.();
+		} catch (err) {
+			onError?.((err as Error).message);
+		} finally {
+			uploading = false;
+			input.value = '';
+		}
 	}
 </script>
 
-<DropdownMenu.Root>
-	<DropdownMenu.Trigger>
-		{#snippet child({ props }: { props: Record<string, unknown> })}
-			<Button {variant} {size} {...props}>
-				<Upload class="h-4 w-4 mr-2" />
-				{label}
-			</Button>
-		{/snippet}
-	</DropdownMenu.Trigger>
-	<DropdownMenu.Content align="end">
-		<DropdownMenu.Item onclick={handleUploadFromUrl}>
-			<Globe class="h-4 w-4 mr-2" />
-			Upload from URL
-		</DropdownMenu.Item>
-		<DropdownMenu.Item onclick={handleUploadFromLocal}>
-			<FileUp class="h-4 w-4 mr-2" />
-			Upload from local file
-		</DropdownMenu.Item>
-	</DropdownMenu.Content>
-</DropdownMenu.Root>
+<input
+	bind:this={fileInput}
+	type="file"
+	accept=".nc"
+	class="hidden"
+	onchange={handleFileSelected}
+/>
+
+<Button {variant} {size} onclick={() => fileInput.click()} disabled={uploading}>
+	{#if uploading}
+		<LoaderCircle class="h-4 w-4 mr-2 animate-spin" />
+		Uploading...
+	{:else}
+		<Upload class="h-4 w-4 mr-2" />
+		{label}
+	{/if}
+</Button>

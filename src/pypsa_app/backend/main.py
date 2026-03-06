@@ -10,6 +10,7 @@ from sqlalchemy import text
 from starlette.middleware.sessions import SessionMiddleware
 
 from pypsa_app.backend.__version__ import __description__, __version__
+from pypsa_app.backend.api.deps import set_auth_disabled_user
 from pypsa_app.backend.api.routes import (
     admin,
     api_keys,
@@ -22,10 +23,10 @@ from pypsa_app.backend.api.routes import (
     tasks,
     version,
 )
-from pypsa_app.backend.api.deps import set_auth_disabled_user
 from pypsa_app.backend.cache import cache_service
 from pypsa_app.backend.database import Base, SessionLocal, engine
 from pypsa_app.backend.models import User, UserRole
+from pypsa_app.backend.services.run import SmkExecutorError
 from pypsa_app.backend.settings import API_V1_PREFIX, settings
 
 logging.basicConfig(
@@ -191,7 +192,13 @@ if settings.backend_only:
     )
 
 
-# Global exception handler
+@app.exception_handler(SmkExecutorError)
+async def smk_executor_exception_handler(
+    request: Request, exc: SmkExecutorError
+) -> JSONResponse:
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     if isinstance(exc, HTTPException):

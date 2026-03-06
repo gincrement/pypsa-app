@@ -179,16 +179,27 @@ class Network(Base):
     # Primary key
     id = Column(UuidType(), primary_key=True, default=uuid.uuid4)
 
-    # Ownership (nullable for system networks without an owner)
+    # Ownership
     user_id = Column(
         UuidType(),
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
         index=True,
     )
     owner = relationship("User", foreign_keys=[user_id])
 
-    # Visibility: public (all users) or private (owner only)
+    # Provenance
+    # link to the run that produced this network (if any)
+    source_run_id = Column(
+        UuidType(),
+        ForeignKey("runs.job_id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    source_run = relationship("Run", foreign_keys=[source_run_id])
+
+    # Visibility
+    # public (all users) or private (owner only)
     visibility = Column(
         str_enum(NetworkVisibility, "network_visibility"),
         default=NetworkVisibility.PRIVATE,
@@ -225,8 +236,10 @@ class RunStatus(enum.StrEnum):
     PENDING = "PENDING"
     SETUP = "SETUP"
     RUNNING = "RUNNING"
+    UPLOADING = "UPLOADING"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
+    ERROR = "ERROR"
     CANCELLED = "CANCELLED"
 
 
@@ -242,8 +255,8 @@ class Run(Base):
     job_id = Column(UuidType(), primary_key=True)
     user_id = Column(
         UuidType(),
-        ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=True,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
         index=True,
     )
     owner = relationship("User", foreign_keys=[user_id])
@@ -265,3 +278,4 @@ class Run(Base):
     exit_code = Column(Integer, nullable=True)
     started_at = Column(TIMESTAMP, nullable=True)
     completed_at = Column(TIMESTAMP, nullable=True)
+    import_networks = Column(JSON, nullable=True)

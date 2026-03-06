@@ -3,7 +3,7 @@
 	import { admin } from '$lib/api/client.js';
 	import { formatFileSize, formatDate } from '$lib/utils.js';
 	import type { Network, User, NetworkFilters, NetworkUpdate } from '$lib/types.js';
-	import { Globe, Lock, Server, Settings, Loader2 } from 'lucide-svelte';
+	import { Globe, Lock, Settings, Loader2 } from 'lucide-svelte';
 	import Button from '$lib/components/ui/button/button.svelte';
 	import * as Table from '$lib/components/ui/table';
 	import * as Avatar from '$lib/components/ui/avatar';
@@ -41,7 +41,6 @@
 			const filters: NetworkFilters = {};
 			if (filter === 'public') filters.visibility = 'public';
 			else if (filter === 'private') filters.visibility = 'private';
-			else if (filter === 'system') filters.owner = 'system';
 
 			const response = await admin.listNetworks(0, 100, filters);
 			networks = response.data;
@@ -71,7 +70,7 @@
 
 	function openNetworkDialog(network: Network) {
 		selectedNetwork = network;
-		editOwner = network.owner?.id || 'system';
+		editOwner = network.owner.id;
 		editVisibility = network.visibility;
 		dialogOpen = true;
 	}
@@ -82,9 +81,8 @@
 		const updates: NetworkUpdate = {};
 
 		// Handle owner change
-		const newOwnerId = editOwner === 'system' ? null : editOwner;
-		if (newOwnerId !== selectedNetwork.owner?.id) {
-			updates.user_id = newOwnerId;
+		if (editOwner !== selectedNetwork.owner.id) {
+			updates.user_id = editOwner;
 		}
 
 		// Handle visibility change
@@ -132,8 +130,7 @@
 		}
 	}
 
-	function getVisibilityBadge(visibility: string, hasOwner: boolean) {
-		if (!hasOwner) return { variant: 'secondary' as const, label: 'System', icon: Server };
+	function getVisibilityBadge(visibility: string) {
 		if (visibility === 'public') return { variant: 'default' as const, label: 'Public', icon: Globe };
 		return { variant: 'outline' as const, label: 'Private', icon: Lock };
 	}
@@ -180,14 +177,6 @@
 			<Lock class="mr-1 size-4" />
 			Private
 		</Button>
-		<Button
-			variant={filter === 'system' ? 'default' : 'outline'}
-			size="sm"
-			onclick={() => handleFilterChange('system')}
-		>
-			<Server class="mr-1 size-4" />
-			System
-		</Button>
 	</div>
 
 	{#if loading}
@@ -212,7 +201,7 @@
 				</Table.Header>
 				<Table.Body>
 					{#each networks as network}
-						{@const visBadge = getVisibilityBadge(network.visibility, !!network.owner)}
+						{@const visBadge = getVisibilityBadge(network.visibility)}
 						<Table.Row class="cursor-pointer transition-colors hover:bg-muted/50" onclick={() => openNetworkDialog(network)}>
 							<Table.Cell>
 								<div class="flex flex-col">
@@ -223,19 +212,15 @@
 								</div>
 							</Table.Cell>
 							<Table.Cell>
-								{#if network.owner}
-									<div class="flex items-center gap-2">
-										<Avatar.Root class="size-6">
-											<Avatar.Image src={network.owner.avatar_url} alt={network.owner.username} />
-											<Avatar.Fallback class="text-xs">
-												{network.owner.username.substring(0, 2).toUpperCase()}
-											</Avatar.Fallback>
-										</Avatar.Root>
-										<span class="text-sm">{network.owner.username}</span>
-									</div>
-								{:else}
-									<span class="text-sm text-muted-foreground italic">System</span>
-								{/if}
+								<div class="flex items-center gap-2">
+									<Avatar.Root class="size-6">
+										<Avatar.Image src={network.owner.avatar_url} alt={network.owner.username} />
+										<Avatar.Fallback class="text-xs">
+											{network.owner.username.substring(0, 2).toUpperCase()}
+										</Avatar.Fallback>
+									</Avatar.Root>
+									<span class="text-sm">{network.owner.username}</span>
+								</div>
 							</Table.Cell>
 							<Table.Cell>
 								<Badge variant={visBadge.variant} class="gap-1">
@@ -281,15 +266,12 @@
 						<Select.Trigger class="w-full">
 							{#if usersLoadFailed}
 								<span class="text-muted-foreground">Failed to load users</span>
-							{:else if editOwner === 'system'}
-								System (no owner)
 							{:else}
 								{@const ownerUser = users.find(u => u.id === editOwner)}
 								{ownerUser?.username || 'Select owner...'}
 							{/if}
 						</Select.Trigger>
 						<Select.Content>
-							<Select.Item value="system">System (no owner)</Select.Item>
 							{#each users as user}
 								<Select.Item value={user.id}>{user.username}</Select.Item>
 							{/each}

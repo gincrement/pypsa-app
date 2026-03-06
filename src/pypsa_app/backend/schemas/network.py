@@ -29,9 +29,10 @@ class NetworkResponse(BaseModel):
     meta: dict[str, Any] | None = None
     facets: dict[str, Any] | None = None
 
-    # Ownership and visibility
+    # Ownership, visibility and provenance
     visibility: NetworkVisibility = NetworkVisibility.PRIVATE
-    owner: UserPublicResponse | None = None
+    owner: UserPublicResponse
+    source_run_id: UUID | None = None
 
     # Model properties
     tags: list[str | dict] | None = None
@@ -58,6 +59,6 @@ class NetworkUpdate(BaseModel):
 
 
 class NetworkAdminUpdate(NetworkUpdate):
-    """Admin-only fields. user_id=None removes owner (system network)."""
+    """Admin-only fields"""
 
     user_id: UUID | None = None

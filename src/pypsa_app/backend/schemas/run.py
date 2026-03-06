@@ -25,6 +25,7 @@ class RunCreate(BaseModel):
     snakemake_args: list[str] | None = None
     extra_files: dict[str, str] | None = None
     cache: RunCache | None = None
+    import_networks: list[str] | None = None
 
 
 class RunResponse(BaseModel):
@@ -42,7 +43,8 @@ class RunResponse(BaseModel):
     created_at: datetime
     started_at: datetime | None = None
     completed_at: datetime | None = None
-    owner: UserPublicResponse | None = None
+    import_networks: list[str] | None = None
+    owner: UserPublicResponse
 
 
 class RunListResponse(BaseModel):

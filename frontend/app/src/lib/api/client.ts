@@ -32,14 +32,16 @@ async function request<T>(endpoint: string, options: RequestInit = {}, cancellat
 		activeControllers.set(cancellationKey, controller);
 	}
 
+	const { headers: optHeaders, ...restOptions } = options;
+	const headers: Record<string, string> = options.body instanceof FormData
+		? { ...(optHeaders as Record<string, string>) }
+		: { 'Content-Type': 'application/json', ...(optHeaders as Record<string, string>) };
+
 	const config: RequestInit = {
-		headers: {
-			'Content-Type': 'application/json',
-			...options.headers,
-		},
+		...restOptions,
+		headers,
 		credentials: 'include',
 		signal: controller.signal,
-		...options,
 	};
 
 	try {
@@ -108,11 +110,10 @@ export const networks = {
 	async getSummary(id: string): Promise<Record<string, unknown>> {
 		return request<Record<string, unknown>>(`/networks/${id}/summary`, {}, `network-summary-${id}`);
 	},
-	async scan(): Promise<TaskStatus> {
-		return request<TaskStatus>('/networks/', { method: 'PUT' });
-	},
-	async getScanStatus(taskId: string): Promise<TaskStatus> {
-		return request<TaskStatus>(`/tasks/status/${taskId}`);
+	async upload(file: File): Promise<Network> {
+		const formData = new FormData();
+		formData.append('file', file);
+		return request<Network>('/networks/', { method: 'POST', body: formData });
 	},
 	async reset(): Promise<void> {
 		return request<void>('/networks/reset', { method: 'DELETE' });

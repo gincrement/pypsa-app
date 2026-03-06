@@ -1,21 +1,28 @@
+from __future__ import annotations
+
 import hashlib
 import logging
 import math
+import shutil
 import threading
 import time
 from collections import OrderedDict
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pypsa
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
 
-from pypsa_app.backend.database import SessionLocal
-from pypsa_app.backend.models import Network
+from pypsa_app.backend.models import Network, Permission, User
+from pypsa_app.backend.permissions import has_permission
 from pypsa_app.backend.settings import settings
 from pypsa_app.backend.utils.path_validation import validate_path
 from pypsa_app.backend.utils.serializers import sanitize_metadata
+
+if TYPE_CHECKING:
+    import uuid
+
+    from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
@@ -275,6 +282,75 @@ class NetworkCollectionService:
         return names
 
 
+def _calculate_file_hash(file_path: Path) -> str:
+    """Calculate SHA256 hash of a file."""
+    sha256_hash = hashlib.sha256()
+    with file_path.open("rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+    return sha256_hash.hexdigest()
+
+
+def import_network_file(
+    file_path: Path,
+    original_filename: str,
+    user_id: uuid.UUID,
+    db: Session,
+    source_run_id: uuid.UUID | None = None,
+) -> Network:
+    """Import a network file.
+    
+    Hash, move to storage, extract metadata and create DB record.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user or not has_permission(user, Permission.NETWORKS_MODIFY):
+        msg = "User does not have permission to import networks"
+        raise PermissionError(msg)
+
+    file_hash = _calculate_file_hash(file_path)
+
+    user_dir = settings.networks_path / str(user_id)
+    user_dir.mkdir(parents=True, exist_ok=True)
+    dest = user_dir / f"{file_hash}.nc"
+
+    if dest.exists():
+        # Check if DB record exists for this user
+        existing = (
+            db.query(Network)
+            .filter(Network.user_id == user_id, Network.file_hash == file_hash)
+            .first()
+        )
+        if existing:
+            return existing
+        # File on disk but no DB record, so reuse file and clean up source
+        file_path.unlink(missing_ok=True)
+    else:
+        # Move source file to final location
+        shutil.move(str(file_path), str(dest))
+
+    # Reload from final path and extract metadata
+    service = NetworkService(dest, use_cache=False)
+    info = service.extract_database_info()
+
+    network = Network(
+        user_id=user_id,
+        source_run_id=source_run_id,
+        filename=original_filename,
+        file_path=str(dest),
+        file_hash=file_hash,
+        file_size=service.get_file_size(),
+        name=info["name"],
+        dimensions_count=info["dimensions_count"],
+        components_count=info["components_count"],
+        meta=info["meta"],
+        facets=info["facets"],
+        update_history=[datetime.now(UTC).isoformat()],
+    )
+    db.add(network)
+    db.flush()
+    return network
+
+
 def load_service(
     file_paths: list[str] | list[Path], use_cache: bool = True
 ) -> NetworkService | NetworkCollectionService:
@@ -292,130 +368,3 @@ def load_service(
         return NetworkService(file_paths[0], use_cache=use_cache)
     else:
         return NetworkCollectionService(file_paths, use_cache=use_cache)
-
-
-def _process_network_file(
-    file_path: Path, existing: Network | None, db: Session
-) -> tuple[bool, bool, str | None]:
-    """Process a single network file (create or update).
-
-    Returns:
-        Tuple of (was_added, was_updated, error_message)
-
-    """
-    try:
-        service = NetworkService(file_path, use_cache=False)
-        file_hash = service.calculate_file_hash()
-
-        if existing:
-            if existing.file_hash == file_hash:
-                return False, False, None
-
-            info = service.extract_database_info()
-            existing.file_hash = file_hash
-            existing.file_size = service.get_file_size()
-            existing.name = info["name"]
-            existing.components_count = info["components_count"]
-            existing.dimensions_count = info["dimensions_count"]
-            existing.meta = info["meta"]
-            existing.facets = info["facets"]
-
-            now = datetime.now(UTC).isoformat()
-            existing.update_history = [*(existing.update_history or []), now]
-
-            db.commit()
-            return False, True, None
-
-        # Add new network
-        info = service.extract_database_info()
-        now = datetime.now(UTC).isoformat()
-
-        network = Network(
-            filename=file_path.name,
-            file_path=str(file_path),
-            file_hash=file_hash,
-            file_size=service.get_file_size(),
-            name=info["name"],
-            components_count=info["components_count"],
-            dimensions_count=info["dimensions_count"],
-            meta=info["meta"],
-            facets=info["facets"],
-            update_history=[now],
-        )
-        db.add(network)
-
-        try:
-            db.commit()
-        except IntegrityError:
-            db.rollback()
-            return False, False, None
-        else:
-            return True, False, None
-
-    except Exception as e:
-        db.rollback()
-        logger.exception(
-            "Failed to process network",
-            extra={
-                "network_filename": file_path.name,
-                "network_file_path": str(file_path),
-                "error": str(e),
-                "error_type": type(e).__name__,
-            },
-        )
-        return False, False, str(e)
-
-
-def scan_networks(networks_path: Path | str) -> dict:
-    """Scan directory for network files and update database
-
-    Args:
-        networks_path: Path to directory containing network files (Path or str)
-
-    Returns:
-        Dict with scan results (added, updated, errors)
-
-    """
-    networks_path = Path(networks_path)
-    if not networks_path.exists():
-        return {
-            "status": "error",
-            "error": f"Networks directory does not exist: {networks_path}",
-        }
-
-    files = list(networks_path.rglob("*.nc"))
-    total_files = len(files)
-    added = updated = 0
-    errors = []
-
-    db = SessionLocal()
-    try:
-        for file_path in files:
-            existing = (
-                db.query(Network)
-                .filter(Network.file_path == str(file_path))
-                .with_for_update()
-                .first()
-            )
-
-            was_added, was_updated, error = _process_network_file(
-                file_path, existing, db
-            )
-
-            if was_added:
-                added += 1
-            if was_updated:
-                updated += 1
-            if error:
-                errors.append({"filename": file_path.name, "error": error})
-
-    finally:
-        db.close()
-
-    return {
-        "status": "success",
-        "files_found": total_files,
-        "added": added,
-        "updated": updated,
-        "errors": errors,
-    }

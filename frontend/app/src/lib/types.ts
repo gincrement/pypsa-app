@@ -39,7 +39,8 @@ export interface Network {
 	file_path: string;
 	file_size?: number;
 	visibility: "public" | "private";
-	owner?: User;
+	owner: User;
+	source_run_id?: string;
 	dimensions?: Record<string, number>;
 	dimensions_count?: number;
 	components?: Record<string, number>;
@@ -50,18 +51,27 @@ export interface Network {
 	updated_at?: string;
 }
 
+export type RunStatus = "PENDING" | "SETUP" | "RUNNING" | "UPLOADING" | "COMPLETED" | "FAILED" | "ERROR" | "CANCELLED";
+
+/** Statuses where the run will not change further (no polling needed). */
+export const RUN_FINAL_STATUSES: ReadonlySet<RunStatus> = new Set(["COMPLETED", "FAILED", "ERROR", "CANCELLED"]);
+
+/** Statuses where user actions (cancel, remove) are no longer available. */
+export const RUN_SETTLED_STATUSES: ReadonlySet<RunStatus> = new Set(["UPLOADING", "COMPLETED", "FAILED", "ERROR", "CANCELLED"]);
+
 export interface Run {
 	id: string;
-	status: "PENDING" | "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED";
+	status: RunStatus;
 	workflow?: string;
 	configfile?: string;
 	git_ref?: string;
 	git_sha?: string;
 	exit_code?: number | null;
+	import_networks?: string[];
 	started_at?: string;
 	completed_at?: string;
 	created_at: string;
-	owner?: User;
+	owner: User;
 }
 
 export interface TaskStatus {

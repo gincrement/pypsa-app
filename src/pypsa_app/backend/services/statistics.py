@@ -3,6 +3,10 @@
 import json
 import logging
 
+from pypsa_app.backend.services.network import (
+    NetworkCollectionService,
+    load_service,
+)
 from pypsa_app.backend.utils.serializers import serialize_df
 
 logger = logging.getLogger(__name__)
@@ -10,8 +14,6 @@ logger = logging.getLogger(__name__)
 
 def get_statistics(file_paths: list[str], statistic: str, parameters: dict) -> dict:
     """Get statistics from network files (handles single or multiple networks)"""
-    from pypsa_app.backend.services.network import load_service  # noqa: PLC0415
-
     service = load_service(file_paths, use_cache=True)
     stats_data = getattr(service.n.statistics, statistic)(**parameters)
 
@@ -31,11 +33,6 @@ def get_plot(
     file_paths: list[str], statistic: str, plot_type: str, parameters: dict
 ) -> dict:
     """Generate plot from network files (handles single or multiple networks)"""
-    from pypsa_app.backend.services.network import (  # noqa: PLC0415
-        NetworkCollectionService,
-        load_service,
-    )
-
     service = load_service(file_paths, use_cache=True)
 
     # Sanitize carriers

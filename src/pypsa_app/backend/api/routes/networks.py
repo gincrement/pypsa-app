@@ -1,16 +1,21 @@
 import logging
+import uuid as _uuid
+from pathlib import PurePosixPath
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi import Path as PathParam
 from sqlalchemy import ColumnElement, or_
 from sqlalchemy.orm import Session, joinedload
 
-from pypsa_app.backend.api.deps import get_db, get_accessible_network, require_permission
+from pypsa_app.backend.api.deps import (
+    get_accessible_network,
+    get_db,
+    require_permission,
+)
 from pypsa_app.backend.api.utils.network_utils import (
     delete_network as delete_network_and_file,
 )
-from pypsa_app.backend.api.utils.task_utils import queue_task
 from pypsa_app.backend.models import Network, NetworkVisibility, Permission, User
 from pypsa_app.backend.permissions import (
     can_access_network,
@@ -23,20 +28,63 @@ from pypsa_app.backend.schemas.network import (
     NetworkResponse,
     NetworkUpdate,
 )
-from pypsa_app.backend.schemas.task import TaskQueuedResponse
+from pypsa_app.backend.services.network import import_network_file
 from pypsa_app.backend.settings import settings
-from pypsa_app.backend.tasks import scan_networks_task
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.put("/", response_model=TaskQueuedResponse)
-def scan_networks(
-    user: User = Depends(require_permission(Permission.SYSTEM_MANAGE)),
-) -> dict:
-    """Scan file system for network files and update database"""
-    return queue_task(scan_networks_task, networks_path=str(settings.networks_path))
+@router.post("/", response_model=NetworkResponse, status_code=201)
+def upload_network(
+    file: UploadFile,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_permission(Permission.NETWORKS_MODIFY)),
+) -> Network:
+    """Upload a network file (.nc) and create a database record."""
+    if not file.filename or not file.filename.endswith(".nc"):
+        raise HTTPException(400, "Only .nc (NetCDF) files are accepted")
+
+    # Sanitize path
+    safe_filename = PurePosixPath(file.filename).name
+    if not safe_filename or not safe_filename.endswith(".nc"):
+        raise HTTPException(400, "Invalid filename")
+    safe_filename = safe_filename[:255]
+
+    max_bytes = settings.max_upload_size_mb * 1024 * 1024
+
+    # Write to temp file with enforced size limit
+    user_dir = settings.networks_path / str(user.id)
+    user_dir.mkdir(parents=True, exist_ok=True)
+    tmp = user_dir / f"_upload_{_uuid.uuid4().hex}.tmp"
+
+    bytes_written = 0
+    with tmp.open("wb") as f:
+        while chunk := file.file.read(8192):
+            bytes_written += len(chunk)
+            if bytes_written > max_bytes:
+                tmp.unlink(missing_ok=True)
+                raise HTTPException(
+                    413, f"File too large. Maximum: {settings.max_upload_size_mb} MB"
+                )
+            f.write(chunk)
+
+    try:
+        network = import_network_file(tmp, safe_filename, user.id, db)
+        db.commit()
+        db.refresh(network)
+
+        logger.info(
+            "Network uploaded",
+            extra={
+                "network_id": str(network.id),
+                "network_filename": safe_filename,
+                "user": user.username,
+            },
+        )
+        return network
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 @router.get("/", response_model=NetworkListResponse)
@@ -45,10 +93,7 @@ def list_networks(
     limit: int = 100,
     owners: list[str] | None = Query(
         None,
-        description=(
-            "Filter by owner IDs. Use 'system' for networks"
-            " without owner, 'me' for current user."
-        ),
+        description="Filter by owner IDs. Use 'me' for current user.",
     ),
     db: Session = Depends(get_db),
     user: User = Depends(require_permission(Permission.NETWORKS_VIEW)),
@@ -58,11 +103,10 @@ def list_networks(
 
     visibility_filter = None
     if not has_permission(user, Permission.NETWORKS_MANAGE_ALL):
-        # Non-admin users see: own networks + public + system (user_id=None)
+        # Non-admin users see: own networks + public
         visibility_filter = or_(
             Network.user_id == user.id,
             Network.visibility == NetworkVisibility.PUBLIC,
-            Network.user_id == None,  # noqa: E711
         )
         query = query.filter(visibility_filter)
 
@@ -70,8 +114,6 @@ def list_networks(
         if owners:
 
             def owner_to_condition(owner_id: str) -> ColumnElement[bool]:
-                if owner_id == "system":
-                    return Network.user_id == None  # noqa: E711
                 if owner_id == "me":
                     return Network.user_id == user.id
                 return Network.user_id == owner_id
@@ -84,7 +126,7 @@ def list_networks(
     # Get all unique owners for filter dropdown
     all_owners = []
     if not has_permission(user, Permission.NETWORKS_MANAGE_ALL):
-        owners_query = db.query(Network.user_id).filter(Network.user_id != None)  # noqa: E711
+        owners_query = db.query(Network.user_id)
         if visibility_filter is not None:
             owners_query = owners_query.filter(visibility_filter)
         owner_ids = [oid[0] for oid in owners_query.distinct().all()]

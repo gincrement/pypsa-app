@@ -4,6 +4,7 @@
 	import { page } from '$app/stores';
 	import { runs } from '$lib/api/client.js';
 	import { formatRelativeTime, formatDuration } from '$lib/utils.js';
+	import { RUN_FINAL_STATUSES } from '$lib/types.js';
 	import type { Run, ApiError } from '$lib/types.js';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
@@ -26,7 +27,7 @@
 	let logContainer: HTMLDivElement;
 
 	const isTerminal = $derived(
-		run && ['COMPLETED', 'FAILED', 'CANCELLED'].includes(run.status)
+		run && RUN_FINAL_STATUSES.has(run.status)
 	);
 
 	const duration = $derived(formatDuration(run?.started_at, run?.completed_at));
@@ -91,7 +92,7 @@
 				eventSource = null;
 			}
 			// Start polling for status if not terminal
-			const terminal = run && ['COMPLETED', 'FAILED', 'CANCELLED'].includes(run.status);
+			const terminal = run && RUN_FINAL_STATUSES.has(run.status);
 			if (!terminal) {
 				startPolling();
 			}

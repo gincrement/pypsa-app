@@ -123,7 +123,11 @@ async def callback(request: Request, db: Session = Depends(get_db)) -> RedirectR
 
         # Set session cookie
         response = RedirectResponse(url=redirect_url)
-        is_localhost = urlparse(settings.base_url).hostname in ("localhost", "127.0.0.1", "::1")
+        is_localhost = urlparse(settings.base_url).hostname in (
+            "localhost",
+            "127.0.0.1",
+            "::1",
+        )
         response.set_cookie(
             key=SESSION_COOKIE_NAME,
             value=session_id,

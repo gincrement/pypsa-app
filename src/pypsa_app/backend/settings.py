@@ -84,6 +84,13 @@ class Settings(BaseSettings):
         json_schema_extra={"category": "Authentication", "depends_on": "enable_auth"},
     )
 
+    # Networks
+    max_upload_size_mb: int = Field(
+        default=2000,
+        description="Maximum network file upload size in megabytes",
+        json_schema_extra={"category": "Networks"},
+    )
+
     # Runs
     smk_executor_url: str | None = Field(
         default=None,

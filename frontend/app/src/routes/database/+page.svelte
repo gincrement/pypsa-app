@@ -24,7 +24,6 @@
 	let networksList = $state<NetworkType[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
-	let scanning = $state(false);
 	let totalNetworks = $state(0);
 	let deletingId = $state<string | null>(null);  // Track which network is being deleted
 	let updatingVisibilityId = $state<string | null>(null);  // Track which network visibility is being updated
@@ -120,14 +119,6 @@
 		loading = true;
 		error = null;
 		try {
-			// Handle "none" filter - show empty results without API call
-			if (filters.owners.has('__none__')) {
-				networksList = [];
-				totalNetworks = 0;
-				loading = false;
-				return;
-			}
-
 			const skip = (currentPage - 1) * pageSize;
 
 			// Convert owner Set to API format (use 'me' for current user's ID)
@@ -191,17 +182,8 @@
 		await loadNetworks();
 	}
 
-	async function handleScan() {
-		scanning = true;
-		error = null;
-		try {
-			await networks.scan();
-			await loadNetworks();
-		} catch (err) {
-			error = (err as Error).message;
-		} finally {
-			scanning = false;
-		}
+	async function handleUpload() {
+		await loadNetworks();
 	}
 
 	async function handleDelete(networkId: string) {
@@ -251,7 +233,7 @@
 	function canEditVisibility(network: NetworkType) {
 		if (!authStore.authEnabled || !authStore.user) return false;
 		// Only owner can edit - admin powers are on /admin/networks
-		return network.owner?.id === authStore.user.id;
+		return network.owner.id === authStore.user.id;
 	}
 
 </script>
@@ -259,7 +241,7 @@
 <div class="min-h-screen">
 	<div class="max-w-[80rem] mx-auto py-8">
 		<!-- Actions Bar (Scan + Upload) -->
-		<ActionsBar {scanning} onScan={handleScan} />
+		<ActionsBar onUpload={handleUpload} onError={(msg) => error = msg} />
 
 		<!-- Filter Bar (always visible) -->
 		<FilterBar
@@ -284,7 +266,7 @@
 		{#if viewState === 'loading'}
 			<TableSkeleton rows={pageSize > 10 ? 10 : pageSize} />
 		{:else if viewState === 'empty'}
-			<EmptyState icon={Network} title="No Networks" description="Get started by uploading or scanning for networks." />
+			<EmptyState icon={Network} title="No Networks" description="Get started by uploading a network file." />
 		{:else if viewState === 'no-matches'}
 			<EmptyState icon={FolderOpen} title="No Results" description="No networks match your current filters." />
 		{:else}

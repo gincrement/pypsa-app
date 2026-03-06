@@ -8,16 +8,20 @@ export function formatFileSize(bytes: number | null | undefined): string {
 	return `${mb.toFixed(2)} MB`;
 }
 
+function parseUTCDate(dateString: string): Date {
+	return new Date(dateString.endsWith('Z') ? dateString : dateString + 'Z');
+}
+
 export function formatDate(dateString: string | null | undefined): string {
 	if (!dateString) return '—';
-	const date = new Date(dateString);
+	const date = parseUTCDate(dateString);
 	return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
 }
 
 export function formatDuration(startedAt: string | null | undefined, completedAt?: string | null): string | null {
 	if (!startedAt) return null;
-	const start = new Date(startedAt);
-	const end = completedAt ? new Date(completedAt) : new Date();
+	const start = parseUTCDate(startedAt);
+	const end = completedAt ? parseUTCDate(completedAt) : new Date();
 	const seconds = Math.floor((end.getTime() - start.getTime()) / 1000);
 	if (seconds < 60) return `${seconds}s`;
 	const minutes = Math.floor(seconds / 60);
@@ -30,7 +34,7 @@ export function formatDuration(startedAt: string | null | undefined, completedAt
 
 export function formatRelativeTime(dateString: string | null | undefined): string {
 	if (!dateString) return '—';
-	const date = new Date(dateString);
+	const date = parseUTCDate(dateString);
 	const now = new Date();
 	const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 

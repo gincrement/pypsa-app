@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
 	import { runs } from '$lib/api/client.js';
 	import { formatRelativeTime } from '$lib/utils.js';
+	import { RUN_FINAL_STATUSES } from '$lib/types.js';
 	import type { Run, ApiError } from '$lib/types.js';
 	import type { SortingState } from '@tanstack/table-core';
 	import Pagination from '$lib/components/Pagination.svelte';
@@ -31,6 +32,20 @@
 	// Table state
 	let sorting = $state<SortingState>([]);
 
+	// Live duration ticker 
+	let tick = $state(0);
+	let tickInterval: ReturnType<typeof setInterval> | null = null;
+	const hasActiveRuns = $derived(runsList.some(r => !RUN_FINAL_STATUSES.has(r.status)));
+	$effect(() => {
+		if (hasActiveRuns && !tickInterval) {
+			tickInterval = setInterval(() => tick++, 1000);
+		} else if (!hasActiveRuns && tickInterval) {
+			clearInterval(tickInterval);
+			tickInterval = null;
+		}
+	});
+	onDestroy(() => { if (tickInterval) clearInterval(tickInterval); });
+
 	// View state for conditional rendering
 	const viewState = $derived.by(() => {
 		if (loading) return 'loading';
@@ -46,7 +61,8 @@
 			handleRemove,
 			authEnabled,
 			getCancellingId: () => cancellingId,
-			getRemovingId: () => removingId
+			getRemovingId: () => removingId,
+			getTick: () => tick
 		});
 	});
 

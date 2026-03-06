@@ -193,9 +193,7 @@ def list_all_networks(
     skip: int = 0,
     limit: int = 100,
     visibility: str | None = Query(None, description="Filter: 'public' or 'private'"),
-    owner: str | None = Query(
-        None, description="Filter: 'system' for no owner, or user_id"
-    ),
+    owner: str | None = Query(None, description="Filter by owner user_id"),
     db: Session = Depends(get_db),
     admin: User = Depends(require_permission(Permission.NETWORKS_MANAGE_ALL)),
 ) -> NetworkListResponse:
@@ -215,16 +213,13 @@ def list_all_networks(
 
     # Apply owner filter
     if owner:
-        if owner == "system":
-            query = query.filter(Network.user_id == None)  # noqa: E711
-        else:
-            try:
-                owner_uuid = UUID(owner)
-                query = query.filter(Network.user_id == owner_uuid)
-            except ValueError as e:
-                raise HTTPException(
-                    400, "Invalid owner filter. Must be 'system' or a valid UUID"
-                ) from e
+        try:
+            owner_uuid = UUID(owner)
+            query = query.filter(Network.user_id == owner_uuid)
+        except ValueError as e:
+            raise HTTPException(
+                400, "Invalid owner filter. Must be a valid UUID"
+            ) from e
 
     total = query.count()
     networks = query.order_by(Network.created_at.desc()).offset(skip).limit(limit).all()
@@ -256,18 +251,16 @@ def update_network_admin(
     # Track changes for logging
     changes = []
 
-    # Update user_id (owner) - special handling for "system" (None)
-    if body.user_id is not None or "user_id" in body.model_fields_set:
-        old_owner = network.owner.username if network.owner else "System"
-        if body.user_id is not None:
-            new_owner = db.query(User).filter(User.id == body.user_id).first()
-            if not new_owner:
-                raise HTTPException(400, "Specified owner does not exist")
-            new_owner_name = new_owner.username
-        else:
-            new_owner_name = "System"
+    # Update user_id (owner)
+    if body.user_id is not None:
+        old_owner = network.owner.username
+        new_owner = db.query(User).filter(User.id == body.user_id).first()
+        if not new_owner:
+            raise HTTPException(400, "Specified owner does not exist")
         network.user_id = body.user_id
-        changes.append(f"owner: {old_owner} -> {new_owner_name}")
+        changes.append(f"owner: {old_owner} -> {new_owner.username}")
+    elif "user_id" in body.model_fields_set:
+        raise HTTPException(400, "Cannot set owner to null")
 
     # Update visibility
     if body.visibility is not None:

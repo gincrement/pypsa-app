@@ -29,6 +29,7 @@ ROLE_PERMISSIONS: dict[UserRole, set[Permission]] = {
     },
     UserRole.BOT: {
         Permission.NETWORKS_VIEW,
+        Permission.NETWORKS_MODIFY,
         Permission.RUNS_VIEW,
         Permission.RUNS_MODIFY,
     },
@@ -50,10 +51,9 @@ def has_permission(user: User, permission: Permission) -> bool:
 
 def can_access_network(user: User, network: Network) -> bool:
     is_public = network.visibility == NetworkVisibility.PUBLIC
-    is_system = network.user_id is None
     is_owner = network.user_id == user.id
     is_admin = has_permission(user, Permission.NETWORKS_MANAGE_ALL)
-    return is_public or is_system or is_owner or is_admin
+    return is_public or is_owner or is_admin
 
 
 def can_modify_network(user: User, network: Network) -> bool:
@@ -64,10 +64,9 @@ def can_modify_network(user: User, network: Network) -> bool:
 
 def can_access_run(user: User, run: Run) -> bool:
     """Check if user can view this run."""
-    is_system = run.user_id is None
     is_owner = run.user_id == user.id
     is_admin = has_permission(user, Permission.RUNS_MANAGE_ALL)
-    return is_system or is_owner or is_admin
+    return is_owner or is_admin
 
 
 def can_modify_run(user: User, run: Run) -> bool:

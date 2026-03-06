@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { User, Server } from 'lucide-svelte';
+	import { User } from 'lucide-svelte';
 	import { MultiSelectFilter } from '$lib/components/ui/multi-select-filter';
 	import { authStore } from '$lib/stores/auth.svelte.js';
 
@@ -9,12 +9,9 @@
 		onChange
 	} = $props();
 
-	// Build owner options: System + current user (first) + other users
+	// Build owner options: current user (first) + other users
 	const options = $derived.by(() => {
 		const opts = [];
-
-		// System networks (no owner)
-		opts.push({ id: 'system', label: 'System', icon: Server });
 
 		// Current user always first (if they have networks)
 		const currentUserInOwners = availableOwners.find(o => o.id === authStore.user?.id);

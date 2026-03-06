@@ -1,6 +1,7 @@
 """Redis cache infrastructure and decorator"""
 
 import hashlib
+import inspect
 import json
 import logging
 from collections.abc import Callable
@@ -31,8 +32,6 @@ def cache(key_template: str, ttl: int) -> Callable:
     """
 
     def decorator(func: Callable) -> Callable:
-        import inspect  # noqa: PLC0415
-
         param_names = list(inspect.signature(func).parameters.keys())
 
         @wraps(func)

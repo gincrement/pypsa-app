@@ -20,13 +20,21 @@ from pypsa_app.backend.schemas.run import (
     RunListResponse,
     RunResponse,
 )
-from pypsa_app.backend.services.run import SmkExecutorClient
+from pypsa_app.backend.services.run import SmkExecutorClient, SmkExecutorError
 from pypsa_app.backend.settings import settings
+from pypsa_app.backend.tasks import import_run_outputs_task
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-TERMINAL_STATUSES = {RunStatus.COMPLETED, RunStatus.FAILED, RunStatus.CANCELLED}
+# Statuses where the remote executor is done — no need to sync from smk-executor.
+SMK_SYNCED_STATUSES = {
+    RunStatus.UPLOADING,
+    RunStatus.COMPLETED,
+    RunStatus.FAILED,
+    RunStatus.ERROR,
+    RunStatus.CANCELLED,
+}
 
 
 def _get_smk_client() -> SmkExecutorClient:
@@ -51,11 +59,12 @@ def _check_run_or_404(run_id: uuid.UUID, db: Session, user: User) -> Run:
     return run
 
 
-def _sync_run_from_job(run: Run, job: dict, db: Session) -> None:
-    """Update a Run record from a smk-executor response dict.
+# Statuses that should not be resynced or trigger import again
+_IMPORT_DONE_STATUSES = {RunStatus.UPLOADING, RunStatus.COMPLETED, RunStatus.ERROR}
 
-    Only writes fields that changed. Flushes only if something changed.
-    """
+
+def _sync_run_from_job(run: Run, job: dict, db: Session) -> None:
+    """Update a Run record from a smk-executor response dict."""
     changed = False
     field_map = {
         "workflow": "workflow",
@@ -79,7 +88,21 @@ def _sync_run_from_job(run: Run, job: dict, db: Session) -> None:
             new_status = RunStatus(raw_status)
         except ValueError:
             new_status = None
-        if new_status and run.status != new_status:
+
+        completed_with_import_pending = (
+            new_status == RunStatus.COMPLETED
+            and run.status not in _IMPORT_DONE_STATUSES
+        )
+        if completed_with_import_pending and run.import_networks:
+            run.status = RunStatus.UPLOADING
+            changed = True
+            db.flush()
+            import_run_outputs_task.apply_async(args=(str(run.job_id),))
+        elif completed_with_import_pending:
+            # Nothing to import
+            run.status = RunStatus.COMPLETED
+            changed = True
+        elif new_status and run.status != new_status:
             run.status = new_status
             changed = True
 
@@ -104,6 +127,7 @@ def create_run(
         workflow=result.get("workflow", body.workflow),
         configfile=result.get("configfile", body.configfile),
         snakemake_args=body.snakemake_args,
+        import_networks=body.import_networks,
         status=RunStatus(result.get("status", "PENDING")),
     )
     db.add(run)
@@ -132,13 +156,13 @@ def list_runs(
     """List runs visible to the current user."""
     query = db.query(Run).options(joinedload(Run.owner))
     if not has_permission(user, Permission.RUNS_MANAGE_ALL):
-        query = query.filter((Run.user_id == user.id) | (Run.user_id.is_(None)))
+        query = query.filter(Run.user_id == user.id)
 
     total = query.count()
     runs = query.order_by(Run.created_at.desc()).offset(skip).limit(limit).all()
 
     # Sync non-terminal runs in this page from smk-executor
-    non_terminal = [r for r in runs if r.status not in TERMINAL_STATUSES]
+    non_terminal = [r for r in runs if r.status not in SMK_SYNCED_STATUSES]
     if non_terminal:
         try:
             all_jobs = smk_client.list_jobs()
@@ -150,7 +174,7 @@ def list_runs(
                     _sync_run_from_job(run, job, db)
 
             db.commit()
-        except HTTPException:
+        except SmkExecutorError:
             # smk-executor unreachable, serve from DB only
             pass
 
@@ -171,12 +195,12 @@ def get_run(
     run = _check_run_or_404(run_id, db, user)
 
     # Sync from smk-executor if not in terminal state
-    if run.status not in TERMINAL_STATUSES:
+    if run.status not in SMK_SYNCED_STATUSES:
         try:
             job = smk_client.get_job(str(run_id))
             _sync_run_from_job(run, job, db)
             db.commit()
-        except HTTPException:
+        except SmkExecutorError:
             # smk-executor unreachable or job already garbage
             # collected, fall back to local DB
             pass
@@ -223,7 +247,9 @@ def download_run_output(
     if ".." in PurePosixPath(path).parts:
         raise HTTPException(400, "Invalid path")
     _check_run_or_404(run_id, db, user)
-    filename = urllib.parse.quote(re.sub(r'[\x00-\x1f\x7f"\\;]', "_", path.rsplit("/", 1)[-1]))
+    filename = urllib.parse.quote(
+        re.sub(r'[\x00-\x1f\x7f"\\;]', "_", path.rsplit("/", 1)[-1])
+    )
     return StreamingResponse(
         smk_client.download_job_output(str(run_id), path),
         media_type="application/octet-stream",
@@ -247,9 +273,9 @@ def cancel_run(
         result = smk_client.cancel_job(str(run_id))
         _sync_run_from_job(run, result, db)
         db.commit()
-    except HTTPException as e:
+    except SmkExecutorError as e:
         if e.status_code in (404, 409):
-            if run.status not in TERMINAL_STATUSES:
+            if run.status not in SMK_SYNCED_STATUSES:
                 run.status = RunStatus.CANCELLED
                 db.commit()
         else:

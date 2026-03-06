@@ -19,24 +19,7 @@
 	const isLoading = $derived(actions.some((a) => a.loading));
 </script>
 
-{#if actions.length === 1}
-	{@const action = actions[0]}
-	<div onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Enter' && e.stopPropagation()} role="button" tabindex="-1">
-		<Button
-			variant="ghost"
-			size="icon"
-			class="h-8 w-8"
-			disabled={action.loading}
-			onclick={action.onclick}
-		>
-			{#if action.loading}
-				<Loader2 class="h-4 w-4 animate-spin" />
-			{:else}
-				<action.icon class="h-4 w-4" />
-			{/if}
-		</Button>
-	</div>
-{:else if actions.length > 1}
+{#if actions.length > 0}
 	<div onclick={(e) => e.stopPropagation()} onkeydown={(e) => e.key === 'Enter' && e.stopPropagation()} role="button" tabindex="-1">
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger>
