@@ -231,7 +231,7 @@ class Network(Base):
 
 
 class RunStatus(enum.StrEnum):
-    """Run status, mirrors smk-executor's JobStatus."""
+    """Run status, mirrors Snakedispatch's JobStatus."""
 
     PENDING = "PENDING"
     SETUP = "SETUP"
@@ -246,8 +246,8 @@ class RunStatus(enum.StrEnum):
 class Run(Base):
     """Persists run metadata for statistics.
 
-    Job metadata is synced from smk-executor on every status poll
-    and survives after smk-executor garbage collects the job.
+    Job metadata is synced from Snakedispatch on every status poll
+    and survives after Snakedispatch garbage collects the job.
     """
 
     __tablename__ = "runs"
@@ -269,7 +269,7 @@ class Run(Base):
     extra_files = Column(JSON, nullable=True)
     cache = Column(JSON, nullable=True)
 
-    # Job metadata (synced from smk-executor)
+    # Job metadata (synced from Snakedispatch)
     git_ref = Column(String(255), nullable=True)
     git_sha = Column(String(40), nullable=True)
     status = Column(

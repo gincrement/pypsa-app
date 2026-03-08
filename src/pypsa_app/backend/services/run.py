@@ -1,4 +1,4 @@
-"""HTTP client for the smk-executor service."""
+"""HTTP client for the Snakedispatch service."""
 
 import logging
 from collections.abc import Iterator
@@ -12,8 +12,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_TIMEOUT = 30.0
 
 
-class SmkExecutorError(Exception):
-    """Error communicating with smk-executor service."""
+class SnakedispatchError(Exception):
+    """Error communicating with Snakedispatch service."""
 
     def __init__(self, status_code: int, detail: str) -> None:
         self.status_code = status_code
@@ -21,8 +21,8 @@ class SmkExecutorError(Exception):
         super().__init__(detail)
 
 
-class SmkExecutorClient:
-    """Talks to smk-executor over HTTP using httpx."""
+class SnakedispatchClient:
+    """Talks to Snakedispatch over HTTP using httpx."""
 
     def __init__(self, base_url: str) -> None:
         self.base_url = base_url.rstrip("/")
@@ -39,15 +39,17 @@ class SmkExecutorClient:
         try:
             response = httpx.request(method, url, json=json, timeout=timeout)
         except httpx.ConnectError as e:
-            raise SmkExecutorError(503, "smk-executor service is unreachable") from e
+            raise SnakedispatchError(503, "Snakedispatch backend is unreachable") from e
         except httpx.TimeoutException as e:
-            raise SmkExecutorError(504, "smk-executor request timed out") from e
+            raise SnakedispatchError(504, "Snakedispatch request timed out") from e
 
         if response.status_code == HTTPStatus.NOT_FOUND:
-            raise SmkExecutorError(HTTPStatus.NOT_FOUND, "Job not found on smk-executor")
+            raise SnakedispatchError(
+                HTTPStatus.NOT_FOUND, "Job not found on Snakedispatch"
+            )
         if response.status_code >= HTTPStatus.BAD_REQUEST:
             detail = response.text[:500]
-            raise SmkExecutorError(502, f"smk-executor error: {detail}")
+            raise SnakedispatchError(502, f"Snakedispatch error: {detail}")
 
         return response.json()
 
@@ -86,16 +88,18 @@ class SmkExecutorClient:
             client = httpx.Client(timeout=None)  # noqa: S113
             response = client.send(client.build_request("GET", url), stream=True)
         except httpx.ConnectError as e:
-            raise SmkExecutorError(503, "smk-executor service is unreachable") from e
+            raise SnakedispatchError(503, "Snakedispatch backend is unreachable") from e
 
         if response.status_code == HTTPStatus.NOT_FOUND:
             response.close()
             client.close()
-            raise SmkExecutorError(HTTPStatus.NOT_FOUND, "Not found on smk-executor")
+            raise SnakedispatchError(
+                HTTPStatus.NOT_FOUND, "File is not available anymore"
+            )
         if response.status_code >= HTTPStatus.BAD_REQUEST:
             response.close()
             client.close()
-            raise SmkExecutorError(502, "smk-executor streaming error")
+            raise SnakedispatchError(502, "Snakedispatch backend is not available")
 
         def generate() -> Iterator[bytes]:
             try:
@@ -118,9 +122,7 @@ class SmkExecutorClient:
                     yield line[6:].encode()
                 elif line.startswith("data:"):
                     yield line[5:].encode()
-                elif line.startswith("event:"):
-                    continue
-                elif line.strip() == "":
+                elif line.startswith("event:") or line.strip() == "":
                     continue
 
     def download_job_output(self, job_id: str, path: str) -> Iterator[bytes]:
@@ -133,13 +135,13 @@ class SmkExecutorClient:
         try:
             with httpx.stream("GET", url, timeout=300.0) as response:
                 if response.status_code >= HTTPStatus.BAD_REQUEST:
-                    raise SmkExecutorError(
-                        502, f"smk-executor download error: {response.status_code}"
+                    raise SnakedispatchError(
+                        502, f"Snakedispatch download error: {response.status_code}"
                     )
                 with dest.open("wb") as f:
                     for chunk in response.iter_bytes():
                         f.write(chunk)
         except httpx.ConnectError as e:
-            raise SmkExecutorError(503, "smk-executor service is unreachable") from e
+            raise SnakedispatchError(503, "Snakedispatch backend is unreachable") from e
         except httpx.TimeoutException as e:
-            raise SmkExecutorError(504, "smk-executor download timed out") from e
+            raise SnakedispatchError(504, "Snakedispatch download timed out") from e

@@ -92,9 +92,9 @@ class Settings(BaseSettings):
     )
 
     # Runs
-    smk_executor_url: str | None = Field(
+    snakedispatch_url: str | None = Field(
         default=None,
-        description="URL of the smk-executor service (e.g. http://smk-executor:8000)",
+        description="URL of the Snakedispatch service (e.g. http://snakedispatch:8000)",
         json_schema_extra={"category": "Runs"},
     )
 

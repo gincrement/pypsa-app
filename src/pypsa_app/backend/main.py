@@ -26,7 +26,7 @@ from pypsa_app.backend.api.routes import (
 from pypsa_app.backend.cache import cache_service
 from pypsa_app.backend.database import Base, SessionLocal, engine
 from pypsa_app.backend.models import User, UserRole
-from pypsa_app.backend.services.run import SmkExecutorError
+from pypsa_app.backend.services.run import SnakedispatchError
 from pypsa_app.backend.settings import API_V1_PREFIX, settings
 
 logging.basicConfig(
@@ -127,29 +127,29 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     else:
         logger.info("Authentication disabled")
 
-    # Check smk-executor connectivity
-    if settings.smk_executor_url:
+    # Check Snakedispatch connectivity
+    if settings.snakedispatch_url:
         try:
             from pypsa_app.backend.services.run import (  # noqa: PLC0415
-                SmkExecutorClient,
+                SnakedispatchClient,
             )
 
-            client = SmkExecutorClient(settings.smk_executor_url)
+            client = SnakedispatchClient(settings.snakedispatch_url)
             health = client.health_check()
             logger.info(
-                "smk-executor connected",
+                "Snakedispatch connected",
                 extra={
-                    "url": settings.smk_executor_url,
+                    "url": settings.snakedispatch_url,
                     "status": health.get("status"),
                 },
             )
         except Exception as e:
             logger.warning(
-                "smk-executor unreachable at startup (non-fatal)",
-                extra={"url": settings.smk_executor_url, "error": str(e)},
+                "Snakedispatch unreachable at startup (non-fatal)",
+                extra={"url": settings.snakedispatch_url, "error": str(e)},
             )
     else:
-        logger.info("smk-executor not configured (SMK_EXECUTOR_URL not set)")
+        logger.info("Snakedispatch not configured (SNAKEDISPATCH_URL not set)")
 
     yield
 
@@ -192,9 +192,9 @@ if settings.backend_only:
     )
 
 
-@app.exception_handler(SmkExecutorError)
-async def smk_executor_exception_handler(
-    request: Request, exc: SmkExecutorError
+@app.exception_handler(SnakedispatchError)
+async def snakedispatch_exception_handler(
+    request: Request, exc: SnakedispatchError
 ) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
@@ -251,7 +251,7 @@ def health_check() -> dict:
         "status": "healthy",
         "version": __version__,
         "cache": {"status": "unknown", "type": "redis"},
-        "smk_executor": {"status": "not_configured"},
+        "snakedispatch": {"status": "not_configured"},
     }
 
     # Check cache health
@@ -274,20 +274,20 @@ def health_check() -> dict:
         health_status["cache"]["error"] = str(e)
         health_status["status"] = "degraded"
 
-    # Check smk-executor health
-    if settings.smk_executor_url:
+    # Check Snakedispatch health
+    if settings.snakedispatch_url:
         try:
             from pypsa_app.backend.services.run import (  # noqa: PLC0415
-                SmkExecutorClient,
+                SnakedispatchClient,
             )
 
-            client = SmkExecutorClient(settings.smk_executor_url)
+            client = SnakedispatchClient(settings.snakedispatch_url)
             result = client.health_check()
-            health_status["smk_executor"]["status"] = result.get("status", "unknown")
-            health_status["smk_executor"]["ssh"] = result.get("ssh", False)
+            health_status["snakedispatch"]["status"] = result.get("status", "unknown")
+            health_status["snakedispatch"]["ssh"] = result.get("ssh", False)
         except Exception as e:
-            health_status["smk_executor"]["status"] = "unhealthy"
-            health_status["smk_executor"]["error"] = str(e)
+            health_status["snakedispatch"]["status"] = "unhealthy"
+            health_status["snakedispatch"]["error"] = str(e)
             health_status["status"] = "degraded"
 
     return health_status

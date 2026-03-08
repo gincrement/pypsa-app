@@ -13,7 +13,7 @@ from pypsa_app.backend.database import SessionLocal
 from pypsa_app.backend.models import Run, RunStatus
 from pypsa_app.backend.schemas.task import TaskResultResponse
 from pypsa_app.backend.services.network import import_network_file
-from pypsa_app.backend.services.run import SmkExecutorClient
+from pypsa_app.backend.services.run import SnakedispatchClient
 from pypsa_app.backend.services.statistics import get_plot as get_plot_service
 from pypsa_app.backend.services.statistics import (
     get_statistics as get_statistics_service,
@@ -77,10 +77,10 @@ def import_run_outputs_task(self: Any, job_id: str) -> None:
         if not run or run.status != RunStatus.UPLOADING:
             return
 
-        smk_client = SmkExecutorClient(settings.smk_executor_url)
+        sd_client = SnakedispatchClient(settings.snakedispatch_url)
         wanted_set = set(run.import_networks or [])
 
-        outputs = smk_client.get_job_outputs(job_id)
+        outputs = sd_client.get_job_outputs(job_id)
         nc_outputs = [
             o
             for o in outputs
@@ -95,7 +95,7 @@ def import_run_outputs_task(self: Any, job_id: str) -> None:
             os.close(fd)
             tmp = Path(tmp_str)
             try:
-                smk_client.download_job_output_to_file(job_id, output_path, tmp)
+                sd_client.download_job_output_to_file(job_id, output_path, tmp)
                 filename = PurePosixPath(output_path).name
                 network = import_network_file(
                     tmp, filename, run.user_id, db, source_run_id=run.job_id
