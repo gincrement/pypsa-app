@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { Badge } from '$lib/components/ui/badge';
-	import type { Run } from '$lib/types.js';
+	import type { RunSummary } from '$lib/types.js';
 
 	type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
 
-	let { run }: { run: Run } = $props();
+	let { run }: { run: RunSummary } = $props();
 
 	const statusConfig = $derived.by((): { variant: BadgeVariant; label: string; class?: string } => {
 		const status = run.status as string;

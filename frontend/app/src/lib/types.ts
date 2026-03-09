@@ -16,7 +16,7 @@ export interface ApiKey {
 	id: string;
 	name: string;
 	key_prefix: string;
-	user_id: string;
+	owner: User;
 	created_at: string;
 	last_used_at?: string;
 	expires_at?: string;
@@ -52,6 +52,18 @@ export interface Network {
 	updated_at?: string;
 }
 
+export interface BackendPublic {
+	id: string;
+	name: string;
+	is_active: boolean;
+}
+
+export interface Backend extends BackendPublic {
+	url: string;
+	created_at: string;
+	updated_at?: string;
+}
+
 export type RunStatus = "PENDING" | "SETUP" | "RUNNING" | "UPLOADING" | "COMPLETED" | "FAILED" | "ERROR" | "CANCELLED";
 
 /** Statuses where the run will not change further (no polling needed). */
@@ -60,22 +72,33 @@ export const RUN_FINAL_STATUSES: ReadonlySet<RunStatus> = new Set(["COMPLETED", 
 /** Statuses where user actions (cancel, remove) are no longer available. */
 export const RUN_SETTLED_STATUSES: ReadonlySet<RunStatus> = new Set(["UPLOADING", "COMPLETED", "FAILED", "ERROR", "CANCELLED"]);
 
-export interface Run {
+export interface RunNetwork {
+	id: string;
+	name: string | null;
+	filename: string;
+}
+
+export interface RunSummary {
 	id: string;
 	status: RunStatus;
 	workflow: string;
 	configfile?: string;
-	snakemake_args?: string[];
-	extra_files?: Record<string, string>;
-	cache?: { key: string; dirs: string[] };
-	import_networks?: string[];
 	git_ref?: string;
 	git_sha?: string;
-	exit_code?: number | null;
 	started_at?: string;
 	completed_at?: string;
 	created_at: string;
 	owner: User;
+	backend: BackendPublic;
+}
+
+export interface Run extends RunSummary {
+	snakemake_args?: string[];
+	extra_files?: Record<string, string>;
+	cache?: { key: string; dirs: string[] };
+	import_networks?: string[];
+	exit_code?: number | null;
+	networks: RunNetwork[];
 }
 
 export interface TaskStatus {

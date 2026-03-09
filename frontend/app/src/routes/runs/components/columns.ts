@@ -7,20 +7,20 @@ import { X, Trash2, RotateCw } from 'lucide-svelte';
 import OwnerCell from '$lib/components/OwnerCell.svelte';
 import type { ColumnDef } from '@tanstack/table-core';
 import { RUN_SETTLED_STATUSES } from '$lib/types.js';
-import type { Run } from '$lib/types.js';
+import type { RunSummary } from '$lib/types.js';
 
 interface RunsColumnsHelpers {
 	formatRelativeTime: (dateString: string | null | undefined) => string;
 	handleCancel: (id: string) => void;
 	handleRemove: (id: string) => void;
-	handleRerun: (run: Run) => void;
+	handleRerun: (run: RunSummary) => void;
 	authEnabled: boolean;
 	getCancellingId?: () => string | null;
 	getRemovingId?: () => string | null;
 	getTick?: () => number;
 }
 
-export const createColumns = (helpers: RunsColumnsHelpers): ColumnDef<Run, unknown>[] => {
+export const createColumns = (helpers: RunsColumnsHelpers): ColumnDef<RunSummary, unknown>[] => {
 	const {
 		formatRelativeTime,
 		handleCancel,
@@ -122,12 +122,12 @@ export const createColumns = (helpers: RunsColumnsHelpers): ColumnDef<Run, unkno
 						accessorKey: 'owner',
 						header: 'Owner',
 						enableSorting: false,
-						cell: (info: { row: { original: Run } }) => {
+						cell: (info: { row: { original: RunSummary } }) => {
 							const run = info.row.original;
 							return renderComponent(OwnerCell, { item: run });
 						}
 					}
-				] as ColumnDef<Run, unknown>[]
+				] as ColumnDef<RunSummary, unknown>[]
 			: []),
 		{
 			id: 'actions',
@@ -164,5 +164,5 @@ export const createColumns = (helpers: RunsColumnsHelpers): ColumnDef<Run, unkno
 				return renderComponent(ActionsCell, { actions });
 			}
 		}
-	] as ColumnDef<Run, unknown>[];
+	] as ColumnDef<RunSummary, unknown>[];
 };

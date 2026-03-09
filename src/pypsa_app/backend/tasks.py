@@ -10,7 +10,7 @@ from typing import Any
 
 from pypsa_app.backend.cache import cache
 from pypsa_app.backend.database import SessionLocal
-from pypsa_app.backend.models import Run, RunStatus
+from pypsa_app.backend.models import Run, RunStatus, SnakedispatchBackend
 from pypsa_app.backend.schemas.task import TaskResultResponse
 from pypsa_app.backend.services.network import import_network_file
 from pypsa_app.backend.services.run import SnakedispatchClient
@@ -77,7 +77,21 @@ def import_run_outputs_task(self: Any, job_id: str) -> None:
         if not run or run.status != RunStatus.UPLOADING:
             return
 
-        sd_client = SnakedispatchClient(settings.snakedispatch_url)
+        backend = (
+            db.query(SnakedispatchBackend)
+            .filter(SnakedispatchBackend.id == run.backend_id)
+            .first()
+        )
+        if backend is None:
+            logger.error(
+                "Backend %s not found in DB for run %s",
+                run.backend_id,
+                job_id,
+            )
+            run.status = RunStatus.ERROR
+            db.commit()
+            return
+        sd_client = SnakedispatchClient(backend.url)
         wanted_set = set(run.import_networks or [])
 
         outputs = sd_client.get_job_outputs(job_id)

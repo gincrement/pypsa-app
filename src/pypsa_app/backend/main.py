@@ -25,7 +25,8 @@ from pypsa_app.backend.api.routes import (
 )
 from pypsa_app.backend.cache import cache_service
 from pypsa_app.backend.database import Base, SessionLocal, engine
-from pypsa_app.backend.models import User, UserRole
+from pypsa_app.backend.models import SnakedispatchBackend, User, UserRole
+from pypsa_app.backend.services.backend_registry import backend_registry
 from pypsa_app.backend.services.run import SnakedispatchError
 from pypsa_app.backend.settings import API_V1_PREFIX, settings
 
@@ -34,6 +35,53 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _sync_backends() -> None:
+    """Upsert backends from settings into the DB and populate the registry."""
+    configured = {b["name"]: b["url"] for b in settings.resolved_backends}
+    db = SessionLocal()
+    try:
+        for backend in db.query(SnakedispatchBackend).all():
+            if backend.name in configured:
+                backend.url = configured.pop(backend.name)
+                backend.is_active = True
+            else:
+                backend.is_active = False
+
+        for name, url in configured.items():
+            db.add(SnakedispatchBackend(name=name, url=url, is_active=True))
+
+        db.commit()
+
+        # Populate registry (needs DB ids for new backends)
+        backend_registry.clear()
+        for backend in (
+            db.query(SnakedispatchBackend)
+            .filter(SnakedispatchBackend.is_active.is_(True))
+            .all()
+        ):
+            backend_registry.register(backend.id, backend.name, backend.url)
+
+        # Startup health check (non-fatal)
+        for bid, client in backend_registry.all_clients().items():
+            name = backend_registry.get_name(bid)
+            try:
+                health = client.health_check()
+                logger.info(
+                    "Snakedispatch backend connected",
+                    extra={
+                        "backend_name": name,
+                        "status": health.get("status"),
+                    },
+                )
+            except Exception as e:
+                logger.warning(
+                    "Snakedispatch backend unreachable at startup",
+                    extra={"backend_name": name, "error": str(e)},
+                )
+    finally:
+        db.close()
 
 
 def _ensure_system_user() -> None:
@@ -127,29 +175,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     else:
         logger.info("Authentication disabled")
 
-    # Check Snakedispatch connectivity
-    if settings.snakedispatch_url:
-        try:
-            from pypsa_app.backend.services.run import (  # noqa: PLC0415
-                SnakedispatchClient,
-            )
-
-            client = SnakedispatchClient(settings.snakedispatch_url)
-            health = client.health_check()
-            logger.info(
-                "Snakedispatch connected",
-                extra={
-                    "url": settings.snakedispatch_url,
-                    "status": health.get("status"),
-                },
-            )
-        except Exception as e:
-            logger.warning(
-                "Snakedispatch unreachable at startup (non-fatal)",
-                extra={"url": settings.snakedispatch_url, "error": str(e)},
-            )
+    # Backends must exist in DB before registry can map IDs to clients
+    if settings.resolved_backends:
+        _sync_backends()
     else:
-        logger.info("Snakedispatch not configured (SNAKEDISPATCH_URL not set)")
+        logger.info(
+            "No Snakedispatch backends configured (SNAKEDISPATCH_BACKENDS not set)"
+        )
 
     yield
 
@@ -247,11 +279,10 @@ app.include_router(runs.router, prefix=f"{API_V1_PREFIX}/runs", tags=["runs"])
 # Health check endpoint
 @app.get("/health")
 def health_check() -> dict:
-    health_status = {
+    health_status: dict = {
         "status": "healthy",
         "version": __version__,
         "cache": {"status": "unknown", "type": "redis"},
-        "snakedispatch": {"status": "not_configured"},
     }
 
     # Check cache health
@@ -273,22 +304,6 @@ def health_check() -> dict:
         health_status["cache"]["status"] = "unhealthy"
         health_status["cache"]["error"] = str(e)
         health_status["status"] = "degraded"
-
-    # Check Snakedispatch health
-    if settings.snakedispatch_url:
-        try:
-            from pypsa_app.backend.services.run import (  # noqa: PLC0415
-                SnakedispatchClient,
-            )
-
-            client = SnakedispatchClient(settings.snakedispatch_url)
-            result = client.health_check()
-            health_status["snakedispatch"]["status"] = result.get("status", "unknown")
-            health_status["snakedispatch"]["ssh"] = result.get("ssh", False)
-        except Exception as e:
-            health_status["snakedispatch"]["status"] = "unhealthy"
-            health_status["snakedispatch"]["error"] = str(e)
-            health_status["status"] = "degraded"
 
     return health_status
 

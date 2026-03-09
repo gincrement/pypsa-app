@@ -53,7 +53,7 @@ services:
     - SESSION_TTL=${SESSION_TTL:-604800}
     - BASE_URL=${BASE_URL}
       # Executions
-    - SNAKEDISPATCH_URL=${SNAKEDISPATCH_URL:-}
+    - SNAKEDISPATCH_BACKENDS=${SNAKEDISPATCH_BACKENDS:-}
     volumes:
     - ../data:/app/data
     depends_on:
@@ -70,7 +70,7 @@ services:
     environment:
     - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB}
     - REDIS_URL=redis://redis:6379/0
-    - SNAKEDISPATCH_URL=${SNAKEDISPATCH_URL:-}
+    - SNAKEDISPATCH_BACKENDS=${SNAKEDISPATCH_BACKENDS:-}
     volumes:
     - ../data:/app/data
     depends_on:

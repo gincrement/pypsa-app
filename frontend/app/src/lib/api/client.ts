@@ -2,6 +2,9 @@ import type {
 	User,
 	Network,
 	Run,
+	RunSummary,
+	Backend,
+	BackendPublic,
 	TaskStatus,
 	PlotResponse,
 	PlotData,
@@ -234,9 +237,9 @@ export const plots = {
 
 // Runs API
 export const runs = {
-	async list(skip = 0, limit = 100): Promise<PaginatedResponse<Run>> {
+	async list(skip = 0, limit = 100): Promise<PaginatedResponse<RunSummary>> {
 		const params = new URLSearchParams({ skip: String(skip), limit: String(limit) });
-		return request<PaginatedResponse<Run>>(`/runs/?${params}`);
+		return request<PaginatedResponse<RunSummary>>(`/runs/?${params}`);
 	},
 	async get(id: string): Promise<Run> {
 		return request<Run>(`/runs/${id}`, {}, `run-${id}`);
@@ -244,7 +247,10 @@ export const runs = {
 	async cancel(id: string): Promise<void> {
 		return request<void>(`/runs/${id}/cancel`, { method: 'POST' });
 	},
-	async create(body: { workflow: string; configfile?: string; snakemake_args?: string[]; extra_files?: Record<string, string>; cache?: { key: string; dirs: string[] }; import_networks?: string[] }): Promise<Run> {
+	async backends(): Promise<BackendPublic[]> {
+		return request<BackendPublic[]>('/runs/backends');
+	},
+	async create(body: { workflow: string; configfile?: string; snakemake_args?: string[]; extra_files?: Record<string, string>; cache?: { key: string; dirs: string[] }; import_networks?: string[]; backend_id?: string }): Promise<Run> {
 		return request<Run>('/runs/', { method: 'POST', body: JSON.stringify(body) });
 	},
 	async rerun(run: Run): Promise<Run> {
@@ -254,7 +260,8 @@ export const runs = {
 			snakemake_args: run.snakemake_args ?? undefined,
 			extra_files: run.extra_files ?? undefined,
 			cache: run.cache ?? undefined,
-			import_networks: run.import_networks ?? undefined
+			import_networks: run.import_networks ?? undefined,
+			backend_id: run.backend.id
 		});
 	},
 	async remove(id: string): Promise<void> {
@@ -352,6 +359,25 @@ export const admin = {
 
 	async getPermissions(): Promise<Record<string, unknown>> {
 		return request<Record<string, unknown>>('/admin/permissions');
+	},
+
+	async listBackends(): Promise<Backend[]> {
+		return request<Backend[]>('/admin/backends');
+	},
+
+	async listBackendUsers(backendId: string): Promise<User[]> {
+		return request<User[]>(`/admin/backends/${backendId}/users`);
+	},
+
+	async assignUserToBackend(backendId: string, userId: string): Promise<void> {
+		return request<void>(`/admin/backends/${backendId}/users`, {
+			method: 'POST',
+			body: JSON.stringify({ user_id: userId })
+		});
+	},
+
+	async unassignUserFromBackend(backendId: string, userId: string): Promise<void> {
+		return request<void>(`/admin/backends/${backendId}/users/${userId}`, { method: 'DELETE' });
 	}
 };
 

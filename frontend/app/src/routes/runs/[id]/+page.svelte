@@ -5,7 +5,7 @@
 	import { runs } from '$lib/api/client.js';
 	import { formatRelativeTime, formatDuration } from '$lib/utils.js';
 	import { RUN_FINAL_STATUSES, RUN_SETTLED_STATUSES } from '$lib/types.js';
-	import type { Run, ApiError, OutputFile } from '$lib/types.js';
+	import type { Run, ApiError, OutputFile, RunNetwork } from '$lib/types.js';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
 	import { ArrowLeft, Terminal, RotateCw, X, Trash2, Loader2, MoreVertical, Settings2, ChevronRight, ExternalLink, FolderArchive } from 'lucide-svelte';
@@ -28,7 +28,7 @@
 	let configOpen = $state(false);
 
 	let outputFiles = $state<OutputFile[] | null>(null);
-	let outputsOpen = $state(true);
+	let outputsOpen = $state(false);
 	let outputsLoading = $state(false);
 	let outputsError = $state<string | null>(null);
 	let outputsUnavailable = $state(false);
@@ -57,8 +57,11 @@
 		run !== null && RUN_SETTLED_STATUSES.has(run.status)
 	);
 
+	let outputsFetched = $state(false);
+
 	$effect(() => {
-		if (isTerminal && outputFiles === null && !outputsLoading) {
+		if (isTerminal && !outputsFetched) {
+			outputsFetched = true;
 			let cancelled = false;
 			outputsLoading = true;
 			runs.listOutputs(runId).then((files) => {
@@ -122,9 +125,24 @@
 		eventSource = new EventSource(url, { withCredentials: true });
 		streaming = true;
 
+		let pendingLines: string[] = [];
+		let flushScheduled = false;
+
+		function flushLogs() {
+			if (pendingLines.length > 0) {
+				logs.push(...pendingLines);
+				pendingLines = [];
+				scrollToBottom();
+			}
+			flushScheduled = false;
+		}
+
 		eventSource.onmessage = (event) => {
-			logs.push(event.data);
-			scrollToBottom();
+			pendingLines.push(event.data);
+			if (!flushScheduled) {
+				flushScheduled = true;
+				requestAnimationFrame(flushLogs);
+			}
 		};
 
 		eventSource.addEventListener('done', () => {
@@ -282,6 +300,10 @@
 				</div>
 
 				<div class="grid grid-cols-2 md:grid-cols-4 gap-y-3 gap-x-6 text-sm text-muted-foreground">
+					<div>
+						<span class="font-medium text-foreground">Backend:</span>
+						{run.backend.name}
+					</div>
 					{#if run.git_ref || run.git_sha}
 						<div>
 							<span class="font-medium text-foreground">Ref:</span>
@@ -302,6 +324,17 @@
 						<div>
 							<span class="font-medium text-foreground">Exit code:</span>
 							{run.exit_code}
+						</div>
+					{/if}
+					{#if run.networks.length > 0}
+						<div>
+							<span class="font-medium text-foreground">Networks:</span>
+							{#each run.networks as network, i}
+								{#if i > 0}, {/if}
+								<a href="/network?id={network.id}" class="underline hover:text-foreground">
+									{network.filename}
+								</a>
+							{/each}
 						</div>
 					{/if}
 				</div>

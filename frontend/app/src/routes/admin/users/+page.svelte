@@ -181,9 +181,6 @@
 		navigator.clipboard.writeText(text);
 	}
 
-	function getUsernameById(userId: string): string {
-		return users.find(u => u.id === userId)?.username ?? userId.slice(0, 8);
-	}
 
 </script>
 
@@ -362,7 +359,7 @@
 										</div>
 									</Table.Cell>
 									<Table.Cell><code class="text-xs">{key.key_prefix}...</code></Table.Cell>
-									<Table.Cell>{getUsernameById(key.user_id)}</Table.Cell>
+									<Table.Cell>{key.owner.username}</Table.Cell>
 									<Table.Cell>{formatDate(key.created_at)}</Table.Cell>
 									<Table.Cell>{formatDate(key.last_used_at)}</Table.Cell>
 									<Table.Cell>{formatDate(key.expires_at)}</Table.Cell>

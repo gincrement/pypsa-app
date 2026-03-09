@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from pypsa_app.backend.api.deps import get_db, get_networks_or_404, require_permission
+from pypsa_app.backend.api.deps import get_db, get_networks, require_permission
 from pypsa_app.backend.api.utils.task_utils import queue_task
 from pypsa_app.backend.models import Permission, User
 from pypsa_app.backend.schemas.plot import PlotRequest
@@ -21,7 +21,7 @@ def generate_plot(
     user: User = Depends(require_permission(Permission.NETWORKS_VIEW)),
 ) -> dict:
     """Generate plot from PyPSA network or NetworkCollection statistics"""
-    networks = get_networks_or_404(db, request.network_ids, user)
+    networks = get_networks(db, request.network_ids, user)
     file_paths = [net.file_path for net in networks]
 
     return queue_task(

@@ -11,7 +11,14 @@ from sqlalchemy.orm import Session
 
 from pypsa_app.backend.auth.session import get_session_store
 from pypsa_app.backend.database import SessionLocal
-from pypsa_app.backend.models import ApiKey, Network, Permission, User, UserRole
+from pypsa_app.backend.models import (
+    ApiKey,
+    Network,
+    Permission,
+    SnakedispatchBackend,
+    User,
+    UserRole,
+)
 from pypsa_app.backend.permissions import can_access_network, has_permission
 from pypsa_app.backend.settings import SESSION_COOKIE_NAME, settings
 
@@ -180,7 +187,7 @@ def get_accessible_network(
     return network
 
 
-def get_networks_or_404(
+def get_networks(
     db: Session,
     network_ids: list[str],
     user: User | None = None,
@@ -199,13 +206,30 @@ def get_networks_or_404(
     return networks
 
 
+def get_backend(
+    backend_id: UUID = Path(..., description="Backend UUID"),
+    db: Session = Depends(get_db),
+    _admin: User = Depends(require_permission(Permission.SYSTEM_MANAGE)),
+) -> SnakedispatchBackend:
+    """Fetch backend by ID."""
+    backend = (
+        db.query(SnakedispatchBackend)
+        .filter(SnakedispatchBackend.id == backend_id)
+        .first()
+    )
+    if not backend:
+        raise HTTPException(404, "Backend not found")
+    return backend
+
+
 __all__ = [
     "Permission",
     "get_active_user",
+    "get_backend",
     "get_current_user_optional",
     "get_db",
     "get_accessible_network",
-    "get_networks_or_404",
+    "get_networks",
     "hash_api_key",
     "require_permission",
     "set_auth_disabled_user",

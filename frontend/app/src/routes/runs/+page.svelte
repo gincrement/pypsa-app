@@ -6,7 +6,7 @@
 	import { runs } from '$lib/api/client.js';
 	import { formatRelativeTime } from '$lib/utils.js';
 	import { RUN_FINAL_STATUSES } from '$lib/types.js';
-	import type { Run, ApiError } from '$lib/types.js';
+	import type { Run, RunSummary, ApiError } from '$lib/types.js';
 	import type { SortingState } from '@tanstack/table-core';
 	import Pagination from '$lib/components/Pagination.svelte';
 	import { Play } from 'lucide-svelte';
@@ -18,7 +18,7 @@
 	import TableSkeleton from '$lib/components/TableSkeleton.svelte';
 
 	// Data state
-	let runsList = $state<Run[]>([]);
+	let runsList = $state<RunSummary[]>([]);
 	let loading = $state(true);
 	let totalRuns = $state(0);
 	let cancellingId = $state<string | null>(null);
@@ -149,9 +149,10 @@
 		}
 	}
 
-	async function handleRerun(run: Run) {
+	async function handleRerun(run: RunSummary) {
 		try {
-			const newRun = await runs.rerun(run);
+			const fullRun = await runs.get(run.id);
+			const newRun = await runs.rerun(fullRun);
 			goto(`/runs/${newRun.id}`);
 		} catch (err) {
 			if (!(err as ApiError).cancelled) toast.error((err as Error).message);
@@ -189,7 +190,7 @@
 				totalItems={totalRuns}
 				{pageSize}
 				bind:sorting
-				onRowClick={(run: Run) => goto(`/runs/${run.id}`)}
+				onRowClick={(run: RunSummary) => goto(`/runs/${run.id}`)}
 			/>
 
 			<div class="mt-6">

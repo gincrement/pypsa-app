@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from pypsa_app.backend.models import RunStatus
 from pypsa_app.backend.schemas.auth import UserPublicResponse
+from pypsa_app.backend.schemas.backend import BackendPublicResponse
 from pypsa_app.backend.schemas.common import PaginationMeta
 
 
@@ -24,6 +25,16 @@ class OutputFileResponse(BaseModel):
     size: int
 
 
+class RunNetworkSummary(BaseModel):
+    """Lightweight summary of a network imported by a run."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    name: str | None = None
+    filename: str
+
+
 class RunCreate(BaseModel):
     """POST /runs request body."""
 
@@ -33,30 +44,38 @@ class RunCreate(BaseModel):
     extra_files: dict[str, str] | None = None
     cache: RunCache | None = None
     import_networks: list[str] | None = None
+    backend_id: uuid.UUID | None = None
 
 
-class RunResponse(BaseModel):
-    """Single run returned by the API."""
+class RunSummary(BaseModel):
+    """Lightweight run representation for list endpoints."""
 
     model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: uuid.UUID = Field(validation_alias="job_id")
+    status: RunStatus
+    owner: UserPublicResponse
+    backend: BackendPublicResponse
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     workflow: str
     configfile: str | None = None
+    git_ref: str | None = None
+    git_sha: str | None = None
+
+
+class RunResponse(RunSummary):
+    """Full run detail returned by the API."""
+
     snakemake_args: list[str] | None = None
     extra_files: dict[str, str] | None = None
     cache: RunCache | None = None
     import_networks: list[str] | None = None
-    git_ref: str | None = None
-    git_sha: str | None = None
-    status: RunStatus
     exit_code: int | None = None
-    created_at: datetime
-    started_at: datetime | None = None
-    completed_at: datetime | None = None
-    owner: UserPublicResponse
+    networks: list[RunNetworkSummary] = []
 
 
 class RunListResponse(BaseModel):
-    data: list[RunResponse]
+    data: list[RunSummary]
     meta: PaginationMeta

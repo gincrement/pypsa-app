@@ -9,11 +9,13 @@ from sqlalchemy import (
     JSON,
     TIMESTAMP,
     BigInteger,
+    Boolean,
     Column,
     Enum,
     ForeignKey,
     Integer,
     String,
+    Table,
     Text,
     TypeDecorator,
     UniqueConstraint,
@@ -58,6 +60,39 @@ def str_enum(enum_cls: type[enum.Enum], name: str) -> Enum:
         native_enum=True,
         values_callable=lambda e: [m.value for m in e],
     )
+
+
+user_backends = Table(
+    "user_backends",
+    Base.metadata,
+    Column(
+        "user_id",
+        UuidType(),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+    Column(
+        "backend_id",
+        UuidType(),
+        ForeignKey("snakedispatch_backends.id", ondelete="CASCADE"),
+        primary_key=True,
+    ),
+)
+
+
+class SnakedispatchBackend(Base):
+    """A registered Snakedispatch execution backend."""
+
+    __tablename__ = "snakedispatch_backends"
+
+    id = Column(UuidType(), primary_key=True, default=uuid.uuid4)
+    name = Column(String(255), nullable=False, unique=True)
+    url = Column(String(512), nullable=False, unique=True)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(TIMESTAMP, server_default=func.now())
+    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+
+    users = relationship("User", secondary=user_backends, back_populates="backends")
 
 
 class UserRole(enum.StrEnum):
@@ -115,6 +150,10 @@ class User(Base):
         default=UserRole.PENDING,
         nullable=False,
         index=True,
+    )
+
+    backends = relationship(
+        "SnakedispatchBackend", secondary=user_backends, back_populates="users"
     )
 
     def update_last_login(self) -> None:
@@ -260,6 +299,13 @@ class Run(Base):
         index=True,
     )
     owner = relationship("User", foreign_keys=[user_id])
+    backend_id = Column(
+        UuidType(),
+        ForeignKey("snakedispatch_backends.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    backend = relationship("SnakedispatchBackend", foreign_keys=[backend_id])
     created_at = Column(TIMESTAMP, server_default=func.now())
 
     # Job creation inputs (set once at creation, never synced)
@@ -281,3 +327,7 @@ class Run(Base):
     started_at = Column(TIMESTAMP, nullable=True)
     completed_at = Column(TIMESTAMP, nullable=True)
     import_networks = Column(JSON, nullable=True)
+
+    networks = relationship(
+        "Network", foreign_keys="Network.source_run_id", viewonly=True
+    )

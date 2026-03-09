@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { Users, Network } from 'lucide-svelte';
+	import { Users, Network, Server } from 'lucide-svelte';
 	import { authStore } from '$lib/stores/auth.svelte.js';
 	import * as Sidebar from '$lib/components/ui/sidebar';
 
@@ -14,6 +14,11 @@
 			title: 'Network Management',
 			url: '/admin/networks',
 			icon: Network
+		},
+		{
+			title: 'Backend Management',
+			url: '/admin/backends',
+			icon: Server
 		}
 	];
 

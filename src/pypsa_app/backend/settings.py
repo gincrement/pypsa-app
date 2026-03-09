@@ -92,11 +92,34 @@ class Settings(BaseSettings):
     )
 
     # Runs
-    snakedispatch_url: str | None = Field(
+    snakedispatch_backends: str | None = Field(
         default=None,
-        description="URL of the Snakedispatch service (e.g. http://snakedispatch:8000)",
+        description=(
+            "Comma-separated list of Snakedispatch backends in name=url format "
+            "(e.g. cluster-a=http://sd-a:8000,cluster-b=http://sd-b:8000)"
+        ),
         json_schema_extra={"category": "Runs"},
     )
+
+    @property
+    def resolved_backends(self) -> list[dict[str, str]]:
+        """Parse SNAKEDISPATCH_BACKENDS into a list of {name, url} dicts."""
+        if not self.snakedispatch_backends:
+            return []
+        backends = []
+        for raw_entry in self.snakedispatch_backends.split(","):
+            entry = raw_entry.strip()
+            if not entry:
+                continue
+            if "=" not in entry:
+                msg = (
+                    f"Invalid SNAKEDISPATCH_BACKENDS entry '{entry}'. "
+                    "Expected format: name=url"
+                )
+                raise ValueError(msg)
+            name, url = entry.split("=", 1)
+            backends.append({"name": name.strip(), "url": url.strip()})
+        return backends
 
     # Caching
     redis_url: str | None = Field(

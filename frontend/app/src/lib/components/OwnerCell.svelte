@@ -1,9 +1,9 @@
 <script lang="ts">
 	import * as Avatar from '$lib/components/ui/avatar';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import type { Network, Run } from '$lib/types.js';
+	import type { Network, Run, RunSummary } from '$lib/types.js';
 
-	let { item }: { item: Network | Run } = $props();
+	let { item }: { item: Network | Run | RunSummary } = $props();
 
 	const owner = $derived(item.owner);
 </script>
