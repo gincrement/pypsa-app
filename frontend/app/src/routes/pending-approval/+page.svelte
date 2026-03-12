@@ -2,9 +2,6 @@
 	import { authStore } from '$lib/stores/auth.svelte.js';
 	import Button from '$lib/components/ui/button/button.svelte';
 
-	// User data from server guard
-	let { data } = $props();
-
 	function handleLogout() {
 		authStore.logout();
 	}
@@ -30,7 +27,7 @@
 					<div class="flex flex-col items-center gap-1 text-center">
 						<h1 class="text-2xl font-bold">Account Pending Approval</h1>
 						<p class="text-muted-foreground text-balance text-sm">
-							Thank you for signing up, {data.user?.username}!
+							Thank you for signing up, {authStore.user?.username}!
 						</p>
 					</div>
 

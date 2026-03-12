@@ -70,7 +70,9 @@
 		onGlobalFilterChange: (updater: Updater<string>) => {
 			globalFilter = typeof updater === 'function' ? updater(globalFilter) : updater;
 		},
-		globalFilterFn: globalFilterFn ?? (() => true)
+		get globalFilterFn() {
+			return globalFilterFn ?? (() => true);
+		}
 	});
 </script>
 

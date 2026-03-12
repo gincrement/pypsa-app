@@ -1,13 +1,14 @@
 <script lang="ts">
 	import * as Empty from '$lib/components/ui/empty';
 
-	let { icon, title, description } = $props();
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	let { icon, title, description }: { icon: any; title: string; description: string } = $props();
 </script>
 
 <Empty.Root>
 	<Empty.Header>
 		<Empty.Media variant="icon">
-			<icon />
+			<icon></icon>
 		</Empty.Media>
 		<Empty.Title>{title}</Empty.Title>
 		<Empty.Description>{description}</Empty.Description>

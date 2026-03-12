@@ -47,6 +47,17 @@ repos:
   hooks:
   - id: gitleaks
 
+  # Svelte/TypeScript - check types and Svelte warnings
+- repo: local
+  hooks:
+  - id: svelte-check
+    name: svelte-check
+    entry: bash -c 'cd frontend/app && npm run check'
+    language: system
+    files: ^frontend/app/src/
+    types_or: [svelte, ts, javascript]
+    pass_filenames: false
+
   # Lint Github Actions
 - repo: https://github.com/rhysd/actionlint
   rev: v1.7.9

@@ -40,7 +40,7 @@
 	let eventSource: EventSource | null = null;
 	let pollInterval: ReturnType<typeof setInterval> | null = null;
 	let tickInterval: ReturnType<typeof setInterval> | null = null;
-	let logContainer: HTMLDivElement;
+	let logContainer: HTMLDivElement = $state(undefined as unknown as HTMLDivElement);
 
 	// Live duration ticker
 	let tick = $state(0);

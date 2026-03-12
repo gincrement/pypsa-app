@@ -214,7 +214,7 @@
 							</Table.Cell>
 							<Table.Cell>
 								<Badge variant={visBadge.variant} class="gap-1">
-									<svelte:component this={visBadge.icon} class="size-3" />
+									<visBadge.icon class="size-3" />
 									{visBadge.label}
 								</Badge>
 							</Table.Cell>

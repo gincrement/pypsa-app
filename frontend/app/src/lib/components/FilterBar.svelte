@@ -5,9 +5,10 @@
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { FilterDialog } from '$lib/components/ui/filter-dialog';
 	import type { FilterState, FilterCategory } from '$lib/components/ui/filter-dialog';
-	import type { ColumnDef, VisibilityState } from '@tanstack/table-core';
+	import type { VisibilityState } from '@tanstack/table-core';
 
-	type ColumnWithAccessor = ColumnDef<unknown, unknown> & { accessorKey?: string };
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	type ColumnWithAccessor = { header?: any; id?: string; accessorKey?: string };
 
 	interface FilterBarProps {
 		filterCategories?: FilterCategory[];

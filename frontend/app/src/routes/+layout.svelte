@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
@@ -19,6 +20,34 @@
 	import { PanelRight } from 'lucide-svelte';
 
 	let { children, toolbar }: { children?: Snippet; toolbar?: Snippet } = $props();
+
+	// Client-side auth guard
+	$effect(() => {
+		if (authStore.loading || authStore.authEnabled === null) return;
+		if (authStore.authEnabled === false) return;
+
+		const path = $page.url.pathname;
+
+		if (path === '/login') {
+			if (authStore.isAuthenticated && authStore.isApproved) {
+				goto('/', { replaceState: true });
+			}
+		} else if (path === '/pending-approval') {
+			if (!authStore.isAuthenticated) {
+				goto('/login', { replaceState: true });
+			} else if (authStore.isApproved) {
+				goto('/', { replaceState: true });
+			}
+		} else {
+			if (!authStore.isAuthenticated) {
+				goto('/login', { replaceState: true });
+			} else if (authStore.isPending) {
+				goto('/pending-approval', { replaceState: true });
+			} else if (path.startsWith('/admin') && !authStore.isAdmin) {
+				goto('/', { replaceState: true });
+			}
+		}
+	});
 
 	const pageInfo = $derived.by(() => {
 		const path = $page.url.pathname;
@@ -62,7 +91,11 @@
 <ModeWatcher />
 <Toaster position="bottom-right" closeButton richColors duration={8000} />
 
-{#if showSidebar}
+{#if authStore.loading}
+	<div class="flex min-h-svh items-center justify-center">
+		<div class="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-foreground"></div>
+	</div>
+{:else if showSidebar}
 	<Sidebar.Provider bind:open={sidebarStore.open}>
 		<AppSidebar />
 		<Sidebar.Inset>

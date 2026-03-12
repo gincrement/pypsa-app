@@ -1,4 +1,4 @@
-<script context="module" lang="ts">
+<script module lang="ts">
 	// Module-level cache that persists across component instances
 	let cachedVersion: { pypsa: string | null; app: string | null } = { pypsa: null, app: null };
 </script>
@@ -12,8 +12,8 @@
 	import { LogOut, User } from 'lucide-svelte';
 
 	// Use cached version immediately to prevent flicker
-	let pypsaVersion = cachedVersion.pypsa;
-	let appVersion = cachedVersion.app;
+	let pypsaVersion = $state(cachedVersion.pypsa);
+	let appVersion = $state(cachedVersion.app);
 
 	// Format version for display (remove .post1. and git hash)
 	function formatVersion(version: string | null): string | null {
