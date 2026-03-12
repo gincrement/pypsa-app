@@ -9,6 +9,7 @@ from fastapi import APIRouter
 
 from pypsa_app.backend.__version__ import __version__
 from pypsa_app.backend.schemas.version import VersionResponse
+from pypsa_app.backend.settings import settings
 
 router = APIRouter()
 
@@ -41,4 +42,5 @@ async def get_version() -> dict:
         "frontend_app_version": frontend_app_version,
         "frontend_map_version": frontend_map_version,
         "pypsa_version": pypsa.__version__,
+        "snakedispatch_backends": [b["name"] for b in settings.resolved_backends],
     }

@@ -83,7 +83,7 @@ class SnakedispatchClient:
                 for rule in result["rules"]:
                     rule["jobs"] = jobs_by_rule.get(rule["name"], [])
             except Exception:  # noqa: BLE001
-                pass  # Gracefully degrade if endpoint unavailable
+                logger.debug("Failed to enrich job with workflow data", exc_info=True)
         return result
 
     def cancel_job(self, job_id: str) -> dict:

@@ -5,6 +5,7 @@
 	import '../app.css';
 	import favicon from '$lib/assets/favicon.svg';
 	import { authStore } from '$lib/stores/auth.svelte.js';
+	import { initFeatures } from '$lib/stores/features.svelte.js';
 	import { filtersPanelCollapsed } from '$lib/stores/networkPageStore';
 	import { breadcrumbStore } from '$lib/stores/breadcrumb.svelte.js';
 	import { sidebarStore } from '$lib/stores/sidebar.svelte.js';
@@ -49,8 +50,8 @@
 			sidebarStore.open = value === 'true';
 		}
 
-		// Initialize auth state for better client-side UI
-		await authStore.init();
+		// Initialize auth state and feature flags
+		await Promise.all([authStore.init(), initFeatures()]);
 	});
 </script>
 

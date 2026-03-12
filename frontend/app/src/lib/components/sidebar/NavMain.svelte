@@ -2,8 +2,9 @@
 	import { page } from '$app/stores';
 	import { Home, Database, Play } from 'lucide-svelte';
 	import * as Sidebar from '$lib/components/ui/sidebar';
+	import { features } from '$lib/stores/features.svelte.js';
 
-	const navItems = [
+	const allNavItems = [
 		{
 			title: 'Home',
 			url: '/',
@@ -20,6 +21,10 @@
 			icon: Play
 		}
 	];
+
+	const navItems = $derived(
+		allNavItems.filter((item) => item.title !== 'Runs' || features.runsEnabled)
+	);
 
 	// Reactive variable to check current path
 	const currentPath = $derived($page.url.pathname);

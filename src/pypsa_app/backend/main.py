@@ -242,11 +242,13 @@ if settings.backend_only:
     )
 
 
-@app.exception_handler(SnakedispatchError)
-async def snakedispatch_exception_handler(
-    request: Request, exc: SnakedispatchError
-) -> JSONResponse:
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+if settings.resolved_backends:
+
+    @app.exception_handler(SnakedispatchError)
+    async def snakedispatch_exception_handler(
+        request: Request, exc: SnakedispatchError
+    ) -> JSONResponse:
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 
 @app.exception_handler(Exception)
@@ -291,7 +293,8 @@ app.include_router(
 app.include_router(cache.router, prefix=f"{API_V1_PREFIX}/cache", tags=["cache"])
 app.include_router(version.router, prefix=f"{API_V1_PREFIX}/version", tags=["version"])
 app.include_router(tasks.router, prefix=f"{API_V1_PREFIX}/tasks", tags=["tasks"])
-app.include_router(runs.router, prefix=f"{API_V1_PREFIX}/runs", tags=["runs"])
+if settings.resolved_backends:
+    app.include_router(runs.router, prefix=f"{API_V1_PREFIX}/runs", tags=["runs"])
 
 
 # Health check endpoint
