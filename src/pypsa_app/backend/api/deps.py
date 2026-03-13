@@ -177,7 +177,7 @@ def get_accessible_network(
 
     Raises 404 if not found or inaccessible.
     """
-    network = db.query(Network).filter(Network.id == str(network_id)).first()
+    network = db.query(Network).filter(Network.id == network_id).first()
     if not network:
         raise HTTPException(404, "Network not found")
 

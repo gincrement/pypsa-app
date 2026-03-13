@@ -243,7 +243,7 @@ def update_network_admin(
     network = (
         db.query(Network)
         .options(joinedload(Network.owner))
-        .filter(Network.id == str(network_id))
+        .filter(Network.id == network_id)
         .first()
     )
 
@@ -296,7 +296,7 @@ def delete_network_admin(
     admin: User = Depends(require_permission(Permission.NETWORKS_MANAGE_ALL)),
 ) -> dict:
     """Delete any network (admin only)"""
-    network = db.query(Network).filter(Network.id == str(network_id)).first()
+    network = db.query(Network).filter(Network.id == network_id).first()
     if not network:
         raise HTTPException(404, "Network not found")
 

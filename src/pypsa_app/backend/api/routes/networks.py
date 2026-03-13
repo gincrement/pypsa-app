@@ -170,7 +170,7 @@ def get_network(
     network = (
         db.query(Network)
         .options(joinedload(Network.owner))
-        .filter(Network.id == str(network_id))
+        .filter(Network.id == network_id)
         .first()
     )
 
@@ -194,7 +194,7 @@ def update_network(
     network = (
         db.query(Network)
         .options(joinedload(Network.owner))
-        .filter(Network.id == str(network_id))
+        .filter(Network.id == network_id)
         .first()
     )
 

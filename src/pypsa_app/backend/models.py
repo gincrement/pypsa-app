@@ -9,7 +9,6 @@ from sqlalchemy import (
     JSON,
     TIMESTAMP,
     BigInteger,
-    Boolean,
     Column,
     Enum,
     ForeignKey,
@@ -17,39 +16,13 @@ from sqlalchemy import (
     String,
     Table,
     Text,
-    TypeDecorator,
     UniqueConstraint,
+    Uuid,
 )
-from sqlalchemy.dialects.postgresql import UUID as PostgreSQL_UUID
-from sqlalchemy.engine.interfaces import Dialect
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
-from sqlalchemy.types import TypeEngine
 
 from pypsa_app.backend.database import Base
-
-
-class UuidType(TypeDecorator):
-    """Store UUIDs efficiently. Native UUID in PostgreSQL and string in SQLite."""
-
-    impl = String(36)
-    cache_ok = True
-
-    def load_dialect_impl(self, dialect: Dialect) -> TypeEngine:
-        if dialect.name == "postgresql":
-            return dialect.type_descriptor(PostgreSQL_UUID(as_uuid=True))
-        return dialect.type_descriptor(String(36))
-
-    def process_bind_param(self, value: Any, dialect: Dialect) -> Any:
-        if value is None:
-            return None
-        uuid_value = value if isinstance(value, uuid.UUID) else uuid.UUID(value)
-        return uuid_value if dialect.name == "postgresql" else str(uuid_value)
-
-    def process_result_value(self, value: Any, dialect: Dialect) -> uuid.UUID | None:
-        if value is None:
-            return None
-        return value if isinstance(value, uuid.UUID) else uuid.UUID(value)
 
 
 def str_enum(enum_cls: type[enum.Enum], name: str) -> Enum:
@@ -67,13 +40,13 @@ user_backends = Table(
     Base.metadata,
     Column(
         "user_id",
-        UuidType(),
+        Uuid,
         ForeignKey("users.id", ondelete="CASCADE"),
         primary_key=True,
     ),
     Column(
         "backend_id",
-        UuidType(),
+        Uuid,
         ForeignKey("snakedispatch_backends.id", ondelete="CASCADE"),
         primary_key=True,
     ),
@@ -85,14 +58,20 @@ class SnakedispatchBackend(Base):
 
     __tablename__ = "snakedispatch_backends"
 
-    id = Column(UuidType(), primary_key=True, default=uuid.uuid4)
-    name = Column(String(255), nullable=False, unique=True)
-    url = Column(String(512), nullable=False, unique=True)
-    is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(TIMESTAMP, server_default=func.now())
-    updated_at = Column(TIMESTAMP, server_default=func.now(), onupdate=func.now())
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255), unique=True)
+    url: Mapped[str] = mapped_column(String(512), unique=True)
+    is_active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP, server_default=func.now()
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP, server_default=func.now(), onupdate=func.now()
+    )
 
-    users = relationship("User", secondary=user_backends, back_populates="backends")
+    users: Mapped[list["User"]] = relationship(
+        secondary=user_backends, back_populates="backends"
+    )
 
 
 class UserRole(enum.StrEnum):
@@ -133,27 +112,29 @@ class User(Base):
     __tablename__ = "users"
 
     # Primary key
-    id = Column(UuidType(), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
 
     # User profile (currently synced from OAuth provider/ GitHub)
-    username = Column(String(255), nullable=False, unique=True)
-    email = Column(String(255), nullable=True)
-    avatar_url = Column(String(512), nullable=True)
+    username: Mapped[str] = mapped_column(String(255), unique=True)
+    email: Mapped[str | None] = mapped_column(String(255))
+    avatar_url: Mapped[str | None] = mapped_column(String(512))
 
     # Timestamps
-    created_at = Column(TIMESTAMP, server_default=func.now())
-    last_login = Column(TIMESTAMP, nullable=True)
+    created_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP, server_default=func.now()
+    )
+    last_login: Mapped[datetime | None] = mapped_column(TIMESTAMP)
 
     # Role is used for permissions
-    role = Column(
+    role = mapped_column(
         str_enum(UserRole, "user_role"),
         default=UserRole.PENDING,
         nullable=False,
         index=True,
     )
 
-    backends = relationship(
-        "SnakedispatchBackend", secondary=user_backends, back_populates="users"
+    backends: Mapped[list["SnakedispatchBackend"]] = relationship(
+        secondary=user_backends, back_populates="users"
     )
 
     def update_last_login(self) -> None:
@@ -172,19 +153,19 @@ class UserOAuthProvider(Base):
 
     __tablename__ = "user_oauth_providers"
 
-    id = Column(UuidType(), primary_key=True, default=uuid.uuid4)
-    user_id = Column(
-        UuidType(),
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
         index=True,
     )
-    provider = Column(String(50), nullable=False)
-    provider_id = Column(String(255), nullable=False)
+    provider: Mapped[str] = mapped_column(String(50))
+    provider_id: Mapped[str] = mapped_column(String(255))
 
-    created_at = Column(TIMESTAMP, server_default=func.now())
+    created_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP, server_default=func.now()
+    )
 
-    user = relationship("User")
+    user: Mapped["User"] = relationship()
 
     __table_args__ = (
         UniqueConstraint("provider", "provider_id", name="uq_provider_provider_id"),
@@ -196,50 +177,46 @@ class ApiKey(Base):
 
     __tablename__ = "api_keys"
 
-    id = Column(UuidType(), primary_key=True, default=uuid.uuid4)
-    name = Column(String(255), nullable=False)
-    key_hash = Column(String(64), nullable=False, unique=True, index=True)
-    key_prefix = Column(String(8), nullable=False)
-    user_id = Column(
-        UuidType(),
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(255))
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    key_prefix: Mapped[str] = mapped_column(String(8))
+    user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
         index=True,
     )
-    owner = relationship("User")
-    created_at = Column(TIMESTAMP, server_default=func.now())
-    last_used_at = Column(TIMESTAMP, nullable=True)
-    expires_at = Column(TIMESTAMP, nullable=True)
+    owner: Mapped["User"] = relationship()
+    created_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP, server_default=func.now()
+    )
+    last_used_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    expires_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
 
 
 class Network(Base):
     __tablename__ = "networks"
 
     # Primary key
-    id = Column(UuidType(), primary_key=True, default=uuid.uuid4)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
 
     # Ownership
-    user_id = Column(
-        UuidType(),
+    user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
         index=True,
     )
-    owner = relationship("User", foreign_keys=[user_id])
+    owner: Mapped["User"] = relationship(foreign_keys=[user_id])
 
     # Provenance
     # link to the run that produced this network (if any)
-    source_run_id = Column(
-        UuidType(),
+    source_run_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("runs.job_id", ondelete="SET NULL"),
-        nullable=True,
         index=True,
     )
-    source_run = relationship("Run", foreign_keys=[source_run_id])
+    source_run: Mapped["Run | None"] = relationship(foreign_keys=[source_run_id])
 
     # Visibility
     # public (all users) or private (owner only)
-    visibility = Column(
+    visibility = mapped_column(
         str_enum(NetworkVisibility, "network_visibility"),
         default=NetworkVisibility.PRIVATE,
         nullable=False,
@@ -247,21 +224,23 @@ class Network(Base):
     )
 
     # Timestamps
-    created_at = Column(TIMESTAMP, server_default=func.now(), index=True)
-    update_history = Column(JSON, default=list)
+    created_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP, server_default=func.now(), index=True
+    )
+    update_history: Mapped[list | None] = mapped_column(JSON, default=list)
     # File information
-    filename = Column(String(255), nullable=False)
-    file_path = Column(Text, nullable=False, unique=True, index=True)
-    file_size = Column(BigInteger)
-    file_hash = Column(String(64))  # SHA256 for change detection
+    filename: Mapped[str] = mapped_column(String(255))
+    file_path: Mapped[str] = mapped_column(Text, unique=True, index=True)
+    file_size: Mapped[int | None] = mapped_column(BigInteger)
+    file_hash: Mapped[str | None] = mapped_column(String(64))
 
     # Metadata from PyPSA Network
-    name = Column(String(255))
-    dimensions_count = Column(JSON)
-    components_count = Column(JSON)
-    meta = Column(JSON)
-    facets = Column(JSON)
-    topology_svg = Column(Text)
+    name: Mapped[str | None] = mapped_column(String(255))
+    dimensions_count: Mapped[Any | None] = mapped_column(JSON)
+    components_count: Mapped[Any | None] = mapped_column(JSON)
+    meta: Mapped[Any | None] = mapped_column(JSON)
+    facets: Mapped[Any | None] = mapped_column(JSON)
+    topology_svg: Mapped[str | None] = mapped_column(Text)
 
     @property
     def tags(self) -> list | None:
@@ -291,45 +270,45 @@ class Run(Base):
 
     __tablename__ = "runs"
 
-    job_id = Column(UuidType(), primary_key=True)
-    user_id = Column(
-        UuidType(),
+    job_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
         index=True,
     )
-    owner = relationship("User", foreign_keys=[user_id])
-    backend_id = Column(
-        UuidType(),
+    owner: Mapped["User"] = relationship(foreign_keys=[user_id])
+    backend_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("snakedispatch_backends.id", ondelete="SET NULL"),
-        nullable=True,
         index=True,
     )
-    backend = relationship("SnakedispatchBackend", foreign_keys=[backend_id])
-    created_at = Column(TIMESTAMP, server_default=func.now())
+    backend: Mapped["SnakedispatchBackend | None"] = relationship(
+        foreign_keys=[backend_id]
+    )
+    created_at: Mapped[datetime | None] = mapped_column(
+        TIMESTAMP, server_default=func.now()
+    )
 
     # Job creation inputs (set once at creation, never synced)
-    workflow = Column(Text, nullable=False)
-    configfile = Column(String(512), nullable=True)
-    snakemake_args = Column(JSON, nullable=True)
-    extra_files = Column(JSON, nullable=True)
-    cache = Column(JSON, nullable=True)
+    workflow: Mapped[str] = mapped_column(Text)
+    configfile: Mapped[str | None] = mapped_column(String(512))
+    snakemake_args: Mapped[Any | None] = mapped_column(JSON)
+    extra_files: Mapped[Any | None] = mapped_column(JSON)
+    cache: Mapped[Any | None] = mapped_column(JSON)
 
     # Job metadata (synced from Snakedispatch)
-    git_ref = Column(String(255), nullable=True)
-    git_sha = Column(String(40), nullable=True)
-    status = Column(
+    git_ref: Mapped[str | None] = mapped_column(String(255))
+    git_sha: Mapped[str | None] = mapped_column(String(40))
+    status = mapped_column(
         str_enum(RunStatus, "run_status"),
         default=RunStatus.PENDING,
         nullable=False,
     )
-    exit_code = Column(Integer, nullable=True)
-    started_at = Column(TIMESTAMP, nullable=True)
-    completed_at = Column(TIMESTAMP, nullable=True)
-    import_networks = Column(JSON, nullable=True)
-    total_job_count = Column(Integer, nullable=True)
-    jobs_finished = Column(Integer, nullable=True)
+    exit_code: Mapped[int | None] = mapped_column(Integer)
+    started_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP)
+    import_networks: Mapped[Any | None] = mapped_column(JSON)
+    total_job_count: Mapped[int | None] = mapped_column(Integer)
+    jobs_finished: Mapped[int | None] = mapped_column(Integer)
 
-    networks = relationship(
-        "Network", foreign_keys="Network.source_run_id", viewonly=True
+    networks: Mapped[list["Network"]] = relationship(
+        foreign_keys="Network.source_run_id", viewonly=True
     )
