@@ -123,7 +123,13 @@ def create_run(
     if client is None:
         raise HTTPException(503, "Backend is not available")
 
-    payload = body.model_dump(exclude_none=True, exclude={"backend_id"})
+    payload = body.model_dump(
+        exclude_none=True,
+        exclude={"backend_id", "import_networks", "cache"},
+    )
+    if body.cache:
+        payload["cache_key"] = body.cache.key
+        payload["cache_dirs"] = body.cache.dirs
     result = client.submit_job(payload)
 
     run = Run(

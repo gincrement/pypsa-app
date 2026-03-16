@@ -311,15 +311,10 @@
 			<Skeleton class="h-96 w-full rounded-lg" />
 		{:else if run}
 			<!-- Run header -->
-			<div class="bg-card rounded-lg border border-border {run.status === 'FAILED' || run.status === 'ERROR' ? 'border-b-2 border-b-destructive' : ''} p-6 mb-4">
+			<div class="bg-card rounded-lg border border-border p-6 mb-4">
 				<!-- Row 1: Identity & Actions -->
 				<div class="flex items-center gap-3 mb-3">
 					<StatusCell {run} />
-					{#if run.exit_code !== null && run.exit_code !== undefined && run.exit_code !== 0}
-						<span class="inline-flex items-center rounded-md bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive ring-1 ring-inset ring-destructive/20">
-							exit {run.exit_code}
-						</span>
-					{/if}
 					<div class="min-w-0">
 						{#if configDisplay && workflowDisplay}
 							<p class="text-xs text-muted-foreground truncate">{workflowDisplay}</p>

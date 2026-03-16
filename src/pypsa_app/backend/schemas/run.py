@@ -39,6 +39,7 @@ class RunCreate(BaseModel):
     """POST /runs request body."""
 
     workflow: str
+    git_ref: str | None = None
     configfile: str | None = None
     snakemake_args: list[str] | None = None
     extra_files: dict[str, str] | None = None
