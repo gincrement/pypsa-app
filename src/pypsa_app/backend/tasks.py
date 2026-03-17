@@ -12,6 +12,7 @@ from pypsa_app.backend.cache import cache
 from pypsa_app.backend.database import SessionLocal
 from pypsa_app.backend.models import Run, RunStatus, SnakedispatchBackend
 from pypsa_app.backend.schemas.task import TaskResultResponse
+from pypsa_app.backend.services.callback import fire_callback_sync
 from pypsa_app.backend.services.network import import_network_file
 from pypsa_app.backend.services.run import SnakedispatchClient
 from pypsa_app.backend.services.statistics import get_plot as get_plot_service
@@ -69,7 +70,7 @@ def get_plot_task(self: Any, **kwargs: Any) -> dict[str, Any]:
 
 
 @task_app.task(bind=True, name="tasks.import_run_outputs")
-def import_run_outputs_task(self: Any, job_id: str) -> None:
+def import_run_outputs_task(self: Any, job_id: str) -> None:  # noqa: PLR0915
     """Download .nc outputs from a completed run and import as networks."""
     db = SessionLocal()
     try:
@@ -90,6 +91,7 @@ def import_run_outputs_task(self: Any, job_id: str) -> None:
             )
             run.status = RunStatus.ERROR
             db.commit()
+            fire_callback_sync(run)
             return
         sd_client = SnakedispatchClient(backend.url)
         wanted_set = set(run.import_networks or [])
@@ -132,12 +134,14 @@ def import_run_outputs_task(self: Any, job_id: str) -> None:
                 if run:
                     run.status = RunStatus.ERROR
                     db.commit()
+                    fire_callback_sync(run)
                 return
             finally:
                 tmp.unlink(missing_ok=True)
 
         run.status = RunStatus.COMPLETED
         db.commit()
+        fire_callback_sync(run)
     except Exception:
         logger.exception("Import task failed", extra={"run_id": job_id})
         try:
@@ -145,6 +149,7 @@ def import_run_outputs_task(self: Any, job_id: str) -> None:
             if run:
                 run.status = RunStatus.ERROR
                 db.commit()
+                fire_callback_sync(run)
         except Exception:
             logger.exception("Failed to mark run as ERROR", extra={"run_id": job_id})
     finally:

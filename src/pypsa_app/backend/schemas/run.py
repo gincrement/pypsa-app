@@ -2,13 +2,15 @@
 
 import uuid
 from datetime import datetime
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
 from pypsa_app.backend.models import RunStatus
 from pypsa_app.backend.schemas.auth import UserPublicResponse
 from pypsa_app.backend.schemas.backend import BackendPublicResponse
 from pypsa_app.backend.schemas.common import PaginationMeta
+from pypsa_app.backend.settings import settings
 
 
 class RunCache(BaseModel):
@@ -46,6 +48,22 @@ class RunCreate(BaseModel):
     cache: RunCache | None = None
     import_networks: list[str] | None = None
     backend_id: uuid.UUID | None = None
+    callback_url: HttpUrl | None = None
+
+    @field_validator("callback_url")
+    @classmethod
+    def _validate_callback_domain(cls, v: HttpUrl | None) -> HttpUrl | None:
+        if v is None:
+            return v
+        allowed = settings.resolved_callback_domains
+        if not allowed:
+            msg = "Callbacks are not enabled on this server"
+            raise ValueError(msg)
+        host = v.host or ""
+        if not any(host == d or host.endswith(f".{d}") for d in allowed):
+            msg = f"callback_url host '{host}' is not in the allowed domains"
+            raise ValueError(msg)
+        return v
 
 
 class RunSummary(BaseModel):
@@ -75,8 +93,17 @@ class RunResponse(RunSummary):
     extra_files: dict[str, str] | None = None
     cache: RunCache | None = None
     import_networks: list[str] | None = None
+    callback_url: str | None = Field(None, validation_alias="callback_url")
     exit_code: int | None = None
     networks: list[RunNetworkSummary] = []
+
+    @field_validator("callback_url", mode="before")
+    @classmethod
+    def _redact_callback_url(cls, v: str | None) -> str | None:
+        if not v:
+            return None
+        parsed = urlparse(v)
+        return f"{parsed.scheme}://{parsed.hostname}/***"
 
 
 class RunListMeta(PaginationMeta):

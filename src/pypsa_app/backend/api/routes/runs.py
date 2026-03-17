@@ -2,6 +2,7 @@
 
 import logging
 import re
+import threading
 import urllib.parse
 import uuid
 from pathlib import PurePosixPath
@@ -33,8 +34,15 @@ from pypsa_app.backend.schemas.run import (
     RunSummary,
 )
 from pypsa_app.backend.services.backend_registry import backend_registry
+from pypsa_app.backend.services.callback import (
+    _build_payload,
+    post_callback_sync,
+)
 from pypsa_app.backend.services.run import SnakedispatchClient, SnakedispatchError
-from pypsa_app.backend.services.sync import SYNCED_STATUSES, sync_run_from_job
+from pypsa_app.backend.services.sync import (
+    SYNCED_STATUSES,
+    sync_run_from_job,
+)
 from pypsa_app.backend.settings import settings
 
 router = APIRouter()
@@ -125,7 +133,7 @@ def create_run(
 
     payload = body.model_dump(
         exclude_none=True,
-        exclude={"backend_id", "import_networks", "cache"},
+        exclude={"backend_id", "import_networks", "cache", "callback_url"},
     )
     if body.cache:
         payload["cache_key"] = body.cache.key
@@ -142,6 +150,7 @@ def create_run(
         extra_files=body.extra_files,
         cache=body.cache.model_dump() if body.cache else None,
         import_networks=body.import_networks,
+        callback_url=str(body.callback_url) if body.callback_url else None,
         status=RunStatus(result.get("status", "PENDING")),
     )
     db.add(run)
@@ -281,8 +290,18 @@ def get_run(
         if client:
             try:
                 job = client.get_job(str(run_id))
-                sync_run_from_job(run, job, db)
+                needs_callback = sync_run_from_job(run, job, db)
                 db.commit()
+                if needs_callback and run.callback_url:
+                    # TODO: replace with proper async callback or
+                    # FastAPI BackgroundTasks.
+                    url = str(run.callback_url)
+                    payload = _build_payload(run)
+                    threading.Thread(
+                        target=post_callback_sync,
+                        args=(url, payload),
+                        daemon=True,
+                    ).start()
             except SnakedispatchError:
                 pass
 
@@ -378,13 +397,31 @@ def cancel_run(
     sd_client = _get_client_for_run(run)
     try:
         result = sd_client.cancel_job(str(run_id))
-        sync_run_from_job(run, result, db)
+        needs_callback = sync_run_from_job(run, result, db)
         db.commit()
+        if needs_callback and run.callback_url:
+            # TODO: replace with proper async callback or
+            # FastAPI BackgroundTasks.
+            url = str(run.callback_url)
+            payload = _build_payload(run)
+            threading.Thread(
+                target=post_callback_sync, args=(url, payload), daemon=True
+            ).start()
     except SnakedispatchError as e:
         if e.status_code in (404, 409):
             if run.status not in SYNCED_STATUSES:
                 run.status = RunStatus.CANCELLED
                 db.commit()
+                if run.callback_url:
+                    # TODO: replace with proper async callback or
+                    # FastAPI BackgroundTasks.
+                    url = str(run.callback_url)
+                    payload = _build_payload(run)
+                    threading.Thread(
+                        target=post_callback_sync,
+                        args=(url, payload),
+                        daemon=True,
+                    ).start()
         else:
             raise
 

@@ -97,6 +97,26 @@ class Settings(BaseSettings):
         description="Interval in seconds between background Snakedispatch sync cycles",
         json_schema_extra={"category": "Runs"},
     )
+    callback_url_allowed_domains: str = Field(
+        default="",
+        description=(
+            "Comma-separated list of allowed domains for run callback URLs "
+            "(e.g. hooks.myorg.dev,example.com). "
+            "Callbacks are rejected unless the host matches. "
+            "Empty disables callbacks entirely."
+        ),
+        json_schema_extra={"category": "Runs"},
+    )
+
+    @property
+    def resolved_callback_domains(self) -> list[str]:
+        """Parse CALLBACK_URL_ALLOWED_DOMAINS into a list of domain strings."""
+        if not self.callback_url_allowed_domains:
+            return []
+        return [
+            d.strip() for d in self.callback_url_allowed_domains.split(",") if d.strip()
+        ]
+
     snakedispatch_backends: str | None = Field(
         default=None,
         description=(

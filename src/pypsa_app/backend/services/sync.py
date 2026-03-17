@@ -12,9 +12,13 @@ if TYPE_CHECKING:
 from pypsa_app.backend.database import SessionLocal
 from pypsa_app.backend.models import Run, RunStatus
 from pypsa_app.backend.services.backend_registry import backend_registry
+from pypsa_app.backend.services.callback import fire_callback_async
 from pypsa_app.backend.tasks import import_run_outputs_task
 
 logger = logging.getLogger(__name__)
+
+# Hold references to fire-and-forget callback tasks to prevent garbage collection.
+_background_tasks: set[asyncio.Task] = set()
 
 # Statuses where the remote executor is done, no need to sync from Snakedispatch
 SYNCED_STATUSES = {
@@ -41,8 +45,16 @@ _SYNC_FIELDS = [
 ]
 
 
-def sync_run_from_job(run: Run, job: dict, db: Session) -> None:
-    """Update a Run record from a Snakedispatch response dict."""
+_CALLBACK_STATUSES = SYNCED_STATUSES - {RunStatus.UPLOADING}
+
+
+def sync_run_from_job(run: Run, job: dict, db: Session) -> bool:
+    """Update a Run record from a Snakedispatch response dict.
+
+    Returns:
+        True if a callback should be fired after the transaction commits.
+    """
+    old_status = run.status
     changed = False
     for field in _SYNC_FIELDS:
         new_val = job.get(field)
@@ -65,7 +77,7 @@ def sync_run_from_job(run: Run, job: dict, db: Session) -> None:
             run.status = RunStatus.UPLOADING
             db.flush()
             import_run_outputs_task.apply_async(args=(str(run.job_id),))
-            return
+            return False
         if completed_with_import_pending:
             run.status = RunStatus.COMPLETED
             changed = True
@@ -76,14 +88,22 @@ def sync_run_from_job(run: Run, job: dict, db: Session) -> None:
     if changed:
         db.flush()
 
+    return run.status in _CALLBACK_STATUSES and old_status not in _CALLBACK_STATUSES
 
-def sync_non_terminal_runs() -> None:
-    """Poll all backends and update runs that haven't reached a terminal state."""
+
+def sync_non_terminal_runs() -> list[dict]:
+    """Poll all backends and update runs that haven't reached a terminal state.
+
+    Returns:
+        List of callback dicts ``{"url": ..., "payload": ...}`` to be fired
+        by the async caller after the DB session is closed.
+    """
+    callbacks: list[dict] = []
     db = SessionLocal()
     try:
         non_terminal = db.query(Run).filter(Run.status.notin_(SYNCED_STATUSES)).all()
         if not non_terminal:
-            return
+            return callbacks
 
         for backend_id, client in backend_registry.all_clients().items():
             backend_runs = [r for r in non_terminal if r.backend_id == backend_id]
@@ -91,16 +111,29 @@ def sync_non_terminal_runs() -> None:
                 continue
             try:
                 jobs_by_id = {j["job_id"]: j for j in client.list_jobs()}
+                callback_runs: list[Run] = []
                 for run in backend_runs:
                     job = jobs_by_id.get(str(run.job_id))
-                    if job:
-                        sync_run_from_job(run, job, db)
+                    if job and sync_run_from_job(run, job, db):
+                        callback_runs.append(run)
                 db.commit()
+                callbacks.extend(
+                    {
+                        "url": str(run.callback_url),
+                        "payload": {
+                            "run_id": str(run.job_id),
+                            "status": run.status.value,
+                        },
+                    }
+                    for run in callback_runs
+                    if run.callback_url
+                )
             except Exception:
                 db.rollback()
                 logger.warning("Sync failed for backend %s", backend_id, exc_info=True)
     finally:
         db.close()
+    return callbacks
 
 
 async def run_sync_loop(interval: float = 10.0) -> None:
@@ -108,6 +141,12 @@ async def run_sync_loop(interval: float = 10.0) -> None:
     while True:
         await asyncio.sleep(interval)
         try:
-            await asyncio.to_thread(sync_non_terminal_runs)
+            callbacks = await asyncio.to_thread(sync_non_terminal_runs)
+            for cb in callbacks:
+                task = asyncio.create_task(
+                    fire_callback_async(cb["url"], cb["payload"])
+                )
+                _background_tasks.add(task)
+                task.add_done_callback(_background_tasks.discard)
         except Exception:
             logger.warning("Background run sync failed", exc_info=True)

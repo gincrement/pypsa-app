@@ -294,6 +294,8 @@ class Run(Base):
     extra_files: Mapped[Any | None] = mapped_column(JSON)
     cache: Mapped[Any | None] = mapped_column(JSON)
 
+    callback_url: Mapped[str | None] = mapped_column(String(512))
+
     # Job metadata (synced from Snakedispatch)
     git_ref: Mapped[str | None] = mapped_column(String(255))
     git_sha: Mapped[str | None] = mapped_column(String(40))
