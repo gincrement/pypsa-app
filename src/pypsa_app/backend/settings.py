@@ -173,6 +173,43 @@ class Settings(BaseSettings):
         json_schema_extra={"category": "Redis", "depends_on": "redis_url"},
     )
 
+    # SMTP
+    smtp_host: str | None = Field(
+        default=None,
+        description="SMTP server hostname (enables email notifications when set)",
+        json_schema_extra={"category": "Email"},
+    )
+    smtp_port: int = Field(
+        default=587,
+        description="SMTP server port",
+        json_schema_extra={"category": "Email", "depends_on": "smtp_host"},
+    )
+    smtp_username: str | None = Field(
+        default=None,
+        description="SMTP authentication username",
+        json_schema_extra={"category": "Email", "depends_on": "smtp_host"},
+    )
+    smtp_password: str | None = Field(
+        default=None,
+        description="SMTP authentication password",
+        json_schema_extra={"category": "Email", "depends_on": "smtp_host"},
+    )
+    smtp_use_tls: bool = Field(
+        default=True,
+        description="Use TLS/STARTTLS for SMTP connection",
+        json_schema_extra={"category": "Email", "depends_on": "smtp_host"},
+    )
+    smtp_from_address: str = Field(
+        default="noreply@pypsa-app.local",
+        description="Sender email address for notifications",
+        json_schema_extra={"category": "Email", "depends_on": "smtp_host"},
+    )
+
+    @property
+    def smtp_enabled(self) -> bool:
+        """Whether SMTP email notifications are configured."""
+        return self.smtp_host is not None
+
     # Development
     backend_only: bool = Field(
         default=False,

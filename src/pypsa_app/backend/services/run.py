@@ -56,11 +56,6 @@ class SnakedispatchClient:
     def health_check(self) -> dict:
         return self._request("GET", "/health")
 
-    def list_jobs(self) -> list[dict]:
-        """Fetch all jobs."""
-        result = self._request("GET", "/jobs")
-        return result.get("jobs", [])
-
     def submit_job(self, payload: dict) -> dict:
         return self._request("POST", "/jobs", json=payload)
 

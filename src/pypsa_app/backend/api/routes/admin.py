@@ -3,7 +3,7 @@
 import logging
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
 
 from pypsa_app.backend.api.deps import get_backend, get_db, require_permission
@@ -30,6 +30,7 @@ from pypsa_app.backend.schemas.network import (
     NetworkListResponse,
     NetworkResponse,
 )
+from pypsa_app.backend.services.email import send_account_approved_email
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -144,6 +145,7 @@ def update_user_role(
 @router.post("/users/{user_id}/approve", response_model=UserResponse)
 def approve_user(
     user_id: UUID,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     admin: User = Depends(require_permission(Permission.USERS_MANAGE)),
 ) -> User:
@@ -163,6 +165,13 @@ def approve_user(
     db.refresh(user)
 
     logger.info("User approved: %s by %s", user.username, admin.username)
+
+    if user.email:
+        background_tasks.add_task(
+            send_account_approved_email,
+            user.username,
+            user.email,
+        )
 
     return user
 

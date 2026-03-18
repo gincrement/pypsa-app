@@ -13,6 +13,7 @@ from pypsa_app.backend.database import SessionLocal
 from pypsa_app.backend.models import Run, RunStatus
 from pypsa_app.backend.services.backend_registry import backend_registry
 from pypsa_app.backend.services.callback import fire_callback_async
+from pypsa_app.backend.services.run import SnakedispatchError
 from pypsa_app.backend.tasks import import_run_outputs_task
 
 logger = logging.getLogger(__name__)
@@ -109,28 +110,54 @@ def sync_non_terminal_runs() -> list[dict]:
             backend_runs = [r for r in non_terminal if r.backend_id == backend_id]
             if not backend_runs:
                 continue
-            try:
-                jobs_by_id = {j["job_id"]: j for j in client.list_jobs()}
-                callback_runs: list[Run] = []
-                for run in backend_runs:
-                    job = jobs_by_id.get(str(run.job_id))
-                    if job and sync_run_from_job(run, job, db):
+            callback_runs: list[Run] = []
+            for run in backend_runs:
+                try:
+                    job = client.get_job(str(run.job_id))
+                    if sync_run_from_job(run, job, db):
                         callback_runs.append(run)
+                except SnakedispatchError as exc:
+                    if exc.status_code == 404:  # noqa: PLR2004
+                        logger.warning(
+                            "Run %s not found on backend %s, marking as ERROR",
+                            run.job_id,
+                            backend_id,
+                        )
+                        run.status = RunStatus.ERROR
+                        callback_runs.append(run)
+                    else:
+                        logger.warning(
+                            "Transient error syncing run %s on backend %s: %s",
+                            run.job_id,
+                            backend_id,
+                            exc.detail,
+                        )
+                except Exception:
+                    logger.warning(
+                        "Unexpected error syncing run %s on backend %s",
+                        run.job_id,
+                        backend_id,
+                        exc_info=True,
+                    )
+            try:
                 db.commit()
-                callbacks.extend(
-                    {
-                        "url": str(run.callback_url),
-                        "payload": {
-                            "run_id": str(run.job_id),
-                            "status": run.status.value,
-                        },
-                    }
-                    for run in callback_runs
-                    if run.callback_url
-                )
             except Exception:
                 db.rollback()
-                logger.warning("Sync failed for backend %s", backend_id, exc_info=True)
+                logger.warning(
+                    "Sync commit failed for backend %s", backend_id, exc_info=True
+                )
+                continue
+            callbacks.extend(
+                {
+                    "url": str(run.callback_url),
+                    "payload": {
+                        "run_id": str(run.job_id),
+                        "status": run.status.value,
+                    },
+                }
+                for run in callback_runs
+                if run.callback_url
+            )
     finally:
         db.close()
     return callbacks

@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from urllib.parse import urlparse
 
 from authlib.integrations.starlette_client import OAuth, OAuthError
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -13,10 +13,44 @@ from pypsa_app.backend.api.deps import get_current_user_optional, get_db
 from pypsa_app.backend.auth.session import get_session_store
 from pypsa_app.backend.models import User, UserOAuthProvider, UserRole
 from pypsa_app.backend.schemas.auth import UserResponse
+from pypsa_app.backend.services.email import send_new_user_pending_email
 from pypsa_app.backend.settings import SESSION_COOKIE_NAME, settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def _get_admin_emails(db: Session) -> list[str]:
+    """Get email addresses of all admin users."""
+    return [
+        a.email
+        for a in db.query(User).filter(
+            User.role == UserRole.ADMIN, User.email.isnot(None)
+        )
+        if a.email
+    ]
+
+
+def _create_session_response(user_id: int, redirect_url: str) -> RedirectResponse:
+    """Create a redirect response with a session cookie."""
+    session_store = get_session_store()
+    session_id = session_store.create_session(user_id)
+    response = RedirectResponse(url=redirect_url)
+    is_localhost = urlparse(settings.base_url).hostname in (
+        "localhost",
+        "127.0.0.1",
+        "::1",
+    )
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=session_id,
+        httponly=True,
+        secure=not is_localhost,
+        samesite="lax",
+        max_age=settings.session_ttl,
+    )
+    return response
+
 
 oauth = OAuth()
 oauth.register(
@@ -42,7 +76,11 @@ async def login(request: Request) -> RedirectResponse:
 
 
 @router.get("/callback")
-async def callback(request: Request, db: Session = Depends(get_db)) -> RedirectResponse:
+async def callback(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+) -> RedirectResponse:
     """Handle GitHub OAuth callback"""
     if not settings.enable_auth:
         raise HTTPException(status_code=400, detail="Authentication is disabled")
@@ -110,32 +148,20 @@ async def callback(request: Request, db: Session = Depends(get_db)) -> RedirectR
             db.add(oauth_link)
             logger.info("New user registered: %s (role: %s)", user.username, user.role)
 
+        is_pending = user.role == UserRole.PENDING
+        admin_emails = _get_admin_emails(db) if is_pending else []
+
         db.commit()
         db.refresh(user)
 
-        session_store = get_session_store()
-        session_id = session_store.create_session(user.id)
-
-        # Redirect based on role
         redirect_url = settings.base_url
-        if user.role == UserRole.PENDING:
+        if is_pending:
             redirect_url = f"{settings.base_url}/pending-approval"
+            background_tasks.add_task(
+                send_new_user_pending_email, admin_emails, user.username
+            )
 
-        # Set session cookie
-        response = RedirectResponse(url=redirect_url)
-        is_localhost = urlparse(settings.base_url).hostname in (
-            "localhost",
-            "127.0.0.1",
-            "::1",
-        )
-        response.set_cookie(
-            key=SESSION_COOKIE_NAME,
-            value=session_id,
-            httponly=True,
-            secure=not is_localhost,
-            samesite="lax",
-            max_age=settings.session_ttl,
-        )
+        response = _create_session_response(user.id, redirect_url)
 
     except Exception as e:
         logger.exception("OAuth callback error")
