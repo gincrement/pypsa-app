@@ -22,10 +22,10 @@
 		}
 	}
 
-	function jobDuration(job: { started_at?: string; end_time?: string }): number {
+	function jobDuration(job: { started_at?: string; completed_at?: string }): number {
 		if (!job.started_at) return 0;
 		const start = new Date(job.started_at).getTime();
-		const end = job.end_time ? new Date(job.end_time).getTime() : Date.now();
+		const end = job.completed_at ? new Date(job.completed_at).getTime() : Date.now();
 		return Math.max(0, Math.round((end - start) / 1000));
 	}
 

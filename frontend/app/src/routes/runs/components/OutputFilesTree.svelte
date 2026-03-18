@@ -31,8 +31,6 @@
 
 	let { files, runId, workflow = null }: { files: OutputFile[]; runId: string; workflow?: Workflow | null } = $props();
 
-	const SNAKEDISPATCH_PREFIX = /^\/app\/\.snakedispatch\/jobs\/[^/]+\//;
-
 	const ruleMap = $derived.by(() => {
 		const map = new Map<string, { rule: string; type: 'INPUT' | 'OUTPUT' }>();
 		if (!workflow) return map;
@@ -40,11 +38,10 @@
 			for (const job of rule.jobs ?? []) {
 				for (const file of job.files ?? []) {
 					if (file.file_type === 'INPUT' || file.file_type === 'OUTPUT') {
-						const stripped = file.path.replace(SNAKEDISPATCH_PREFIX, '');
-						const existing = map.get(stripped);
+						const existing = map.get(file.path);
 						// Prefer OUTPUT over INPUT (producing rule is more informative)
 						if (!existing || (existing.type === 'INPUT' && file.file_type === 'OUTPUT')) {
-							map.set(stripped, { rule: rule.name, type: file.file_type as 'INPUT' | 'OUTPUT' });
+							map.set(file.path, { rule: rule.name, type: file.file_type as 'INPUT' | 'OUTPUT' });
 						}
 					}
 				}

@@ -57,8 +57,8 @@
 		let totalMs = 0;
 		let count = 0;
 		for (const job of rule.jobs) {
-			if (job.started_at && job.end_time) {
-				const ms = new Date(job.end_time).getTime() - new Date(job.started_at).getTime();
+			if (job.started_at && job.completed_at) {
+				const ms = new Date(job.completed_at).getTime() - new Date(job.started_at).getTime();
 				if (ms > 0) { totalMs += ms; count++; }
 			}
 		}

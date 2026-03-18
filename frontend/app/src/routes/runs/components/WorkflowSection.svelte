@@ -6,7 +6,7 @@
 	import { ChevronRight, GitBranch, Network } from 'lucide-svelte';
 	import * as Table from '$lib/components/ui/table';
 
-	let { runId, isTerminal }: { runId: string; isTerminal: boolean } = $props();
+	let { runId, isTerminal, isFailedRun = false }: { runId: string; isTerminal: boolean; isFailedRun?: boolean } = $props();
 
 	let workflow = $state<Workflow | null>(null);
 	let loading = $state(true);
@@ -24,9 +24,14 @@
 			: 0
 	);
 
-	function ruleStatus(rule: WorkflowRule): 'done' | 'running' | 'pending' {
+	function ruleStatus(rule: WorkflowRule): 'done' | 'running' | 'pending' | 'failed' {
+		if (rule.jobs?.some(j => j.status === 'ERROR')) return 'failed';
 		if (rule.total_job_count === 0) return 'pending';
 		if (rule.jobs_finished >= rule.total_job_count) return 'done';
+		if (isTerminal) {
+			if (rule.jobs_finished > 0) return 'done';
+			return isFailedRun ? 'failed' : 'pending';
+		}
 		if (rule.jobs_finished > 0) return 'running';
 		if (rule.jobs?.some(j => j.started_at)) return 'running';
 		return 'pending';
@@ -42,7 +47,7 @@
 		for (const job of rule.jobs ?? []) {
 			if (!job.started_at) continue;
 			const start = new Date(job.started_at).getTime();
-			const end = job.end_time ? new Date(job.end_time).getTime() : Date.now();
+			const end = job.completed_at ? new Date(job.completed_at).getTime() : Date.now();
 			total += Math.max(0, end - start) / 1000;
 			count++;
 		}
@@ -202,7 +207,7 @@
 								<Table.Cell class="py-1.5 pr-3 font-mono w-0">
 									<div class="flex items-center gap-2">
 										<span class="inline-block h-1.5 w-1.5 rounded-full shrink-0
-											{status === 'done' ? 'bg-primary' : status === 'running' ? 'bg-yellow-500' : 'bg-muted-foreground/30'}
+											{status === 'done' ? 'bg-primary' : status === 'failed' ? 'bg-red-500' : status === 'running' ? 'bg-yellow-500' : 'bg-muted-foreground/30'}
 										"></span>
 										{rule.name}
 									</div>
@@ -212,7 +217,7 @@
 										<div class="flex items-center gap-2">
 											<div class="flex-1 h-1.5 rounded-full overflow-hidden">
 												<div
-													class="h-full rounded-full {status === 'running' ? 'bg-yellow-500' : 'bg-primary'}"
+													class="h-full rounded-full {status === 'failed' ? 'bg-red-500' : status === 'running' ? 'bg-yellow-500' : 'bg-primary'}"
 													style="width: {maxDuration > 0 ? (duration / maxDuration) * 100 : 0}%"
 												></div>
 											</div>

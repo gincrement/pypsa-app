@@ -431,7 +431,7 @@
 
 			<!-- Workflow -->
 			{#if run.status !== 'PENDING'}
-				<WorkflowSection {runId} isTerminal={!!isTerminal} />
+				<WorkflowSection {runId} isTerminal={!!isTerminal} isFailedRun={run.status === 'FAILED' || run.status === 'ERROR'} />
 			{/if}
 
 			<!-- Files -->

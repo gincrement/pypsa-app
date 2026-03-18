@@ -219,7 +219,7 @@ export interface WorkflowJob {
 	wildcards: Record<string, string> | null;
 	threads: number;
 	started_at?: string;
-	end_time?: string;
+	completed_at?: string;
 	files: WorkflowFile[];
 }
 

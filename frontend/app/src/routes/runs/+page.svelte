@@ -50,19 +50,24 @@
 		saveTablePref('runs', 'columnVisibility', v);
 	}
 
-	// Live duration ticker
+	// Live duration ticker + polling for fresh data while runs are active
 	let tick = $state(0);
 	let tickInterval: ReturnType<typeof setInterval> | null = null;
+	let pollInterval: ReturnType<typeof setInterval> | null = null;
 	const hasActiveRuns = $derived(runsList.some(r => !RUN_FINAL_STATUSES.has(r.status)));
 	$effect(() => {
-		if (hasActiveRuns && !tickInterval) {
-			tickInterval = setInterval(() => tick++, 1000);
-		} else if (!hasActiveRuns && tickInterval) {
-			clearInterval(tickInterval);
-			tickInterval = null;
+		if (hasActiveRuns) {
+			if (!tickInterval) tickInterval = setInterval(() => tick++, 1000);
+			if (!pollInterval) pollInterval = setInterval(() => loadRuns(true), 5000);
+		} else {
+			if (tickInterval) { clearInterval(tickInterval); tickInterval = null; }
+			if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
 		}
 	});
-	onDestroy(() => { if (tickInterval) clearInterval(tickInterval); });
+	onDestroy(() => {
+		if (tickInterval) clearInterval(tickInterval);
+		if (pollInterval) clearInterval(pollInterval);
+	});
 
 	// View state for conditional rendering
 	const hasActiveFilters = $derived(
@@ -112,8 +117,8 @@
 		await loadRuns();
 	});
 
-	async function loadRuns() {
-		loading = true;
+	async function loadRuns(silent = false) {
+		if (!silent) loading = true;
 		try {
 			const skip = (currentPage - 1) * pageSize;
 			const apiFilters = filtersToAPI<{ statuses: string[]; workflows: string[]; owners: string[]; git_refs: string[]; configfiles: string[]; backends: string[] }>(filters, FILTER_KEYS);
@@ -135,7 +140,7 @@
 			if (clamped !== null) {
 				currentPage = clamped;
 				await updateURL();
-				return loadRuns();
+				return loadRuns(silent);
 			}
 		} catch (err) {
 			if ((err as ApiError).cancelled) return;
