@@ -111,9 +111,7 @@ def _send_email(
                 )
                 return
         except Exception:
-            logger.warning(
-                "Failed to send email to %s: %s", to, subject, exc_info=True
-            )
+            logger.warning("Failed to send email to %s: %s", to, subject, exc_info=True)
             return
         else:
             logger.info("Email sent to %s: %s", to, subject)

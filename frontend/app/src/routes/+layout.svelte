@@ -17,7 +17,7 @@
 	import { Toaster } from 'svelte-sonner';
 	import * as Sidebar from '$lib/components/ui/sidebar';
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
-	import { PanelRight } from 'lucide-svelte';
+	import { ExternalLink, PanelRight, X } from 'lucide-svelte';
 
 	let { children, toolbar }: { children?: Snippet; toolbar?: Snippet } = $props();
 
@@ -70,7 +70,17 @@
 	// Determine if we should show the filters toggle button (only on network page)
 	const showFiltersToggle = $derived($page.url.pathname.startsWith('/database/network'));
 
+	let bannerDismissed = $state(false);
+	let bannerHeight = $state(0);
+
+	function dismissBanner() {
+		bannerDismissed = true;
+		bannerHeight = 0;
+		localStorage.setItem('dev-banner-dismissed', 'true');
+	}
+
 	onMount(async () => {
+		bannerDismissed = localStorage.getItem('dev-banner-dismissed') === 'true';
 		// Check if there's a saved sidebar state in cookie
 		const cookies = document.cookie.split(';');
 		const sidebarCookie = cookies.find(c => c.trim().startsWith('sidebar:state='));
@@ -91,65 +101,81 @@
 <ModeWatcher />
 <Toaster position="bottom-right" closeButton richColors duration={8000} />
 
-{#if authStore.loading}
-	<div class="flex min-h-svh items-center justify-center">
-		<div class="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-foreground"></div>
-	</div>
-{:else if showSidebar}
-	<Sidebar.Provider bind:open={sidebarStore.open}>
-		<AppSidebar />
-		<Sidebar.Inset>
-			<header class="flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-				<div class="flex items-center gap-2">
-					<Sidebar.Trigger />
-					<div class="h-4 w-px bg-border"></div>
-					<Breadcrumb.Root>
-						<Breadcrumb.List>
-							<Breadcrumb.Item>
-								{#if breadcrumbStore.items.length > 0}
-									<Breadcrumb.Link href={pageInfo.url}>
-										{pageName}
-									</Breadcrumb.Link>
-								{:else}
-									<Breadcrumb.Page>{pageName}</Breadcrumb.Page>
-								{/if}
-							</Breadcrumb.Item>
-							{#each breadcrumbStore.items as item}
-								<Breadcrumb.Separator />
+<div class="flex min-h-svh flex-col" style="--banner-height: {bannerDismissed ? 0 : bannerHeight}px">
+	{#if !bannerDismissed && showSidebar}
+		<div class="flex w-full items-center justify-center gap-2 bg-primary px-4 py-1.5 text-center text-sm font-medium text-primary-foreground"
+			bind:clientHeight={bannerHeight}>
+			<span>
+				This app is in early development. Report bugs or suggest features by opening an
+				<a href="https://github.com/PyPSA/pypsa-app/issues/new" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 font-semibold underline underline-offset-2">
+					issue<ExternalLink class="h-3 w-3" /></a>.
+			</span>
+			<button onclick={() => dismissBanner()} class="ml-2 rounded p-0.5 hover:bg-white/20">
+				<X class="h-3.5 w-3.5" />
+			</button>
+		</div>
+	{/if}
+
+	{#if authStore.loading}
+		<div class="flex flex-1 items-center justify-center">
+			<div class="h-8 w-8 animate-spin rounded-full border-4 border-muted border-t-foreground"></div>
+		</div>
+	{:else if showSidebar}
+		<Sidebar.Provider bind:open={sidebarStore.open} class="flex-1">
+			<AppSidebar />
+			<Sidebar.Inset>
+				<header class="flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+					<div class="flex items-center gap-2">
+						<Sidebar.Trigger />
+						<div class="h-4 w-px bg-border"></div>
+						<Breadcrumb.Root>
+							<Breadcrumb.List>
 								<Breadcrumb.Item>
-									{#if item.href}
-										<Breadcrumb.Link href={item.href}>{item.label}</Breadcrumb.Link>
+									{#if breadcrumbStore.items.length > 0}
+										<Breadcrumb.Link href={pageInfo.url}>
+											{pageName}
+										</Breadcrumb.Link>
 									{:else}
-										<Breadcrumb.Page>{item.label}</Breadcrumb.Page>
+										<Breadcrumb.Page>{pageName}</Breadcrumb.Page>
 									{/if}
 								</Breadcrumb.Item>
-							{/each}
-						</Breadcrumb.List>
-					</Breadcrumb.Root>
+								{#each breadcrumbStore.items as item}
+									<Breadcrumb.Separator />
+									<Breadcrumb.Item>
+										{#if item.href}
+											<Breadcrumb.Link href={item.href}>{item.label}</Breadcrumb.Link>
+										{:else}
+											<Breadcrumb.Page>{item.label}</Breadcrumb.Page>
+										{/if}
+									</Breadcrumb.Item>
+								{/each}
+							</Breadcrumb.List>
+						</Breadcrumb.Root>
+					</div>
+					<div class="ml-auto flex items-center gap-2">
+						{#if toolbar}
+							{@render toolbar()}
+						{/if}
+						{#if showFiltersToggle}
+							<Button
+								variant="ghost"
+								size="icon"
+								class="h-7 w-7"
+								onclick={() => $filtersPanelCollapsed = !$filtersPanelCollapsed}
+								title={$filtersPanelCollapsed ? 'Show filters' : 'Hide filters'}
+							>
+								<PanelRight class="h-4 w-4" />
+							</Button>
+						{/if}
+						<DarkModeToggle />
+					</div>
+				</header>
+				<div class="flex flex-1 flex-col gap-4 p-4 pt-0">
+					{@render children?.()}
 				</div>
-				<div class="ml-auto flex items-center gap-2">
-					{#if toolbar}
-						{@render toolbar()}
-					{/if}
-					{#if showFiltersToggle}
-						<Button
-							variant="ghost"
-							size="icon"
-							class="h-7 w-7"
-							onclick={() => $filtersPanelCollapsed = !$filtersPanelCollapsed}
-							title={$filtersPanelCollapsed ? 'Show filters' : 'Hide filters'}
-						>
-							<PanelRight class="h-4 w-4" />
-						</Button>
-					{/if}
-					<DarkModeToggle />
-				</div>
-			</header>
-			<div class="flex flex-1 flex-col gap-4 p-4 pt-0">
-				{@render children?.()}
-			</div>
-		</Sidebar.Inset>
-	</Sidebar.Provider>
-{:else}
-	{@render children?.()}
-{/if}
+			</Sidebar.Inset>
+		</Sidebar.Provider>
+	{:else}
+		{@render children?.()}
+	{/if}
+</div>
