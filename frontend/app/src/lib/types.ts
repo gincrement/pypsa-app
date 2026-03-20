@@ -170,7 +170,7 @@ export interface NetworkFilters {
 
 export interface NetworkUpdate {
 	visibility?: "public" | "private";
-	[key: string]: unknown;
+	user_id?: string;
 }
 
 // Paginated response type

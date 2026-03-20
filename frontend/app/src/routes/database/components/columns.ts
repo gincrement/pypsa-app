@@ -6,7 +6,7 @@ import TagsCell from '../cells/tags-cell.svelte';
 import UpdateHistoryCell from '../cells/update-history-cell.svelte';
 import ActionsCell from '$lib/components/cells/ActionsCell.svelte';
 import VisibilityCell from '$lib/components/cells/VisibilityCell.svelte';
-import { Lock, Globe, Trash2 } from 'lucide-svelte';
+import { Lock, Globe, Trash2, UserRoundCog } from 'lucide-svelte';
 import OwnerCell from '$lib/components/OwnerCell.svelte';
 import type { ColumnDef } from '@tanstack/table-core';
 import type { Network, NetworkTag, TagType, TagColor } from '$lib/types.js';
@@ -21,8 +21,9 @@ interface DatabaseColumnsHelpers {
 	toggleComponentsExpanded: (id: string) => void;
 	getExpandedComponents: () => Set<string>;
 	handleVisibilityToggle: (id: string, visibility: "public" | "private") => void;
-	canEditVisibility: (network: Network) => boolean;
+	canEditNetwork: (network: Network) => boolean;
 	authEnabled: boolean;
+	handleOwnerChange?: (network: Network) => void;
 	getDeletingId?: () => string | null;
 	getUpdatingVisibilityId?: () => string | null;
 }
@@ -38,8 +39,9 @@ export const createColumns = (helpers: DatabaseColumnsHelpers): ColumnDef<Networ
 		toggleComponentsExpanded,
 		getExpandedComponents,
 		handleVisibilityToggle,
-		canEditVisibility,
+		canEditNetwork,
 		authEnabled,
+		handleOwnerChange,
 		getDeletingId = () => null,
 		getUpdatingVisibilityId = () => null
 	} = helpers;
@@ -125,7 +127,7 @@ export const createColumns = (helpers: DatabaseColumnsHelpers): ColumnDef<Networ
 							const network = info.row.original;
 							return renderComponent(VisibilityCell, {
 								network,
-								canEdit: canEditVisibility(network),
+								canEdit: canEditNetwork(network),
 								onToggle: handleVisibilityToggle
 							});
 						}
@@ -179,12 +181,19 @@ export const createColumns = (helpers: DatabaseColumnsHelpers): ColumnDef<Networ
 			enableSorting: false,
 			cell: (info) => {
 				const network = info.row.original;
-				const canEdit = canEditVisibility(network);
+				const canEdit = canEditNetwork(network);
 				const isPublic = network.visibility === 'public';
 				const isDeleting = getDeletingId() === network.id;
 				const isUpdatingVisibility = getUpdatingVisibilityId() === network.id;
 				const actions = [];
 				if (canEdit) {
+					if (handleOwnerChange) {
+						actions.push({
+							icon: UserRoundCog,
+							label: 'Change owner',
+							onclick: () => handleOwnerChange(network)
+						});
+					}
 					actions.push({
 						icon: isPublic ? Lock : Globe,
 						label: isPublic ? 'Make private' : 'Make public',

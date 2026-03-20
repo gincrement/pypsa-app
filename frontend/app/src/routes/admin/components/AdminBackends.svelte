@@ -1,17 +1,41 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { admin } from '$lib/api/client.js';
-	import { formatDate } from '$lib/utils.js';
-	import { Server, Users, Plus, Trash2 } from 'lucide-svelte';
+	import { Server, Plus, Trash2, Loader2 } from 'lucide-svelte';
 	import Button from '$lib/components/ui/button/button.svelte';
-	import * as Table from '$lib/components/ui/table';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import { Badge } from '$lib/components/ui/badge';
+	import FilterBar from '$lib/components/FilterBar.svelte';
+	import type { FilterState, FilterCategory } from '$lib/components/ui/filter-dialog';
+	import PaginatedTable from '$lib/components/PaginatedTable.svelte';
+	import TableSkeleton from '$lib/components/TableSkeleton.svelte';
+	import { createColumns } from './backend-columns.js';
 	import { toast } from 'svelte-sonner';
 	import type { Backend, User } from '$lib/types.js';
+	import type { SortingState } from '@tanstack/table-core';
 
-	let backends = $state<Backend[]>([]);
+	let allBackends = $state<Backend[]>([]);
+	let filters = $state<FilterState>({});
+
+	const filterCategories: FilterCategory[] = [
+		{
+			key: 'status',
+			label: 'Status',
+			options: [
+				{ id: 'active', label: 'Active' },
+				{ id: 'inactive', label: 'Inactive' }
+			]
+		}
+	];
+
+	let backends = $derived(
+		filters.status?.size
+			? allBackends.filter((b) =>
+					filters.status.has(b.is_active ? 'active' : 'inactive')
+				)
+			: allBackends
+	);
 	let loading = $state(true);
+	let sorting = $state<SortingState>([]);
 
 	// User assignment dialog
 	let selectedBackend = $state<Backend | null>(null);
@@ -20,6 +44,12 @@
 	let dialogOpen = $state(false);
 	let usersLoading = $state(false);
 
+	const columns = $derived(
+		createColumns({
+			onManageUsers: openUserDialog
+		})
+	);
+
 	onMount(async () => {
 		await loadBackends();
 	});
@@ -27,7 +57,7 @@
 	async function loadBackends() {
 		loading = true;
 		try {
-			backends = await admin.listBackends();
+			allBackends = await admin.listBackends();
 		} catch (err) {
 			toast.error((err as Error).message);
 		} finally {
@@ -76,77 +106,35 @@
 	}
 
 	function isAssigned(userId: string): boolean {
-		return assignedUsers.some(u => u.id === userId);
+		return assignedUsers.some((u) => u.id === userId);
 	}
 
-	let unassignedUsers = $derived(allUsers.filter(u => !isAssigned(u.id)));
+	let unassignedUsers = $derived(allUsers.filter((u) => !isAssigned(u.id)));
 </script>
 
-<svelte:head>
-	<title>Admin - Backend Management - PyPSA App</title>
-</svelte:head>
+<FilterBar
+	{filterCategories}
+	{filters}
+	onFilterChange={(f) => (filters = f)}
+/>
 
-<div class="space-y-6">
-	<div>
-		<h1 class="text-2xl font-bold">Backend Management</h1>
-		<p class="text-muted-foreground">Manage Snakedispatch execution backends and user assignments</p>
+{#if loading}
+	<TableSkeleton rows={3} columns={5} />
+{:else if backends.length === 0}
+	<div class="rounded-md border p-6 text-center text-muted-foreground">
+		<Server class="mx-auto mb-2 size-8" />
+		<p>No backends configured.</p>
+		<p class="mt-1 text-xs">
+			Set <code>SNAKEDISPATCH_BACKENDS</code> to register backends.
+		</p>
 	</div>
-
-	{#if loading}
-		<div class="text-muted-foreground text-sm">Loading backends...</div>
-	{:else if backends.length === 0}
-		<div class="rounded-md border p-6 text-center text-muted-foreground">
-			<Server class="mx-auto mb-2 size-8" />
-			<p>No backends configured.</p>
-			<p class="text-xs mt-1">Set <code>SNAKEDISPATCH_BACKENDS</code> to register backends.</p>
-		</div>
-	{:else}
-		<div class="rounded-md border">
-			<Table.Root>
-				<Table.Header>
-					<Table.Row>
-						<Table.Head>Name</Table.Head>
-						<Table.Head>URL</Table.Head>
-						<Table.Head>Status</Table.Head>
-						<Table.Head>Created</Table.Head>
-						<Table.Head class="text-right">Actions</Table.Head>
-					</Table.Row>
-				</Table.Header>
-				<Table.Body>
-					{#each backends as backend}
-						<Table.Row>
-							<Table.Cell>
-								<div class="flex items-center gap-2">
-									<Server class="size-4 text-muted-foreground" />
-									<span class="font-medium">{backend.name}</span>
-								</div>
-							</Table.Cell>
-							<Table.Cell>
-								<code class="text-xs">{backend.url}</code>
-							</Table.Cell>
-							<Table.Cell>
-								<Badge variant={backend.is_active ? 'default' : 'outline'}>
-									{backend.is_active ? 'active' : 'inactive'}
-								</Badge>
-							</Table.Cell>
-							<Table.Cell>{formatDate(backend.created_at)}</Table.Cell>
-							<Table.Cell class="text-right">
-								<Button
-									variant="ghost"
-									size="sm"
-									onclick={() => openUserDialog(backend)}
-								>
-									<Users class="mr-1 size-4" />
-									Users
-								</Button>
-							</Table.Cell>
-						</Table.Row>
-					{/each}
-				</Table.Body>
-			</Table.Root>
-		</div>
-	{/if}
-</div>
+{:else}
+	<PaginatedTable
+		data={backends}
+		columns={columns as any}
+		bind:sorting
+	/>
+{/if}
 
 <!-- User Assignment Dialog -->
 <Dialog.Root bind:open={dialogOpen}>
@@ -161,18 +149,26 @@
 			</Dialog.Header>
 
 			{#if usersLoading}
-				<div class="text-muted-foreground text-sm py-4">Loading users...</div>
+				<div class="flex items-center gap-2 py-4 text-muted-foreground text-sm">
+					<Loader2 class="size-4 animate-spin" />
+					Loading users...
+				</div>
 			{:else}
 				<div class="space-y-4">
-					<!-- Assigned users -->
 					<div>
-						<h3 class="text-sm font-medium mb-2">Assigned Users ({assignedUsers.length})</h3>
+						<h3 class="mb-2 text-sm font-medium">
+							Assigned Users ({assignedUsers.length})
+						</h3>
 						{#if assignedUsers.length === 0}
-							<p class="text-xs text-muted-foreground">No users assigned. Admins always have access.</p>
+							<p class="text-xs text-muted-foreground">
+								No users assigned. Admins always have access.
+							</p>
 						{:else}
 							<div class="space-y-1">
 								{#each assignedUsers as user}
-									<div class="flex items-center justify-between rounded-md border px-3 py-2">
+									<div
+										class="flex items-center justify-between rounded-md border px-3 py-2"
+									>
 										<span class="text-sm">{user.username}</span>
 										<Button
 											variant="ghost"
@@ -189,13 +185,14 @@
 						{/if}
 					</div>
 
-					<!-- Add user -->
 					{#if unassignedUsers.length > 0}
 						<div>
-							<h3 class="text-sm font-medium mb-2">Add User</h3>
-							<div class="space-y-1 max-h-48 overflow-y-auto">
+							<h3 class="mb-2 text-sm font-medium">Add User</h3>
+							<div class="max-h-48 space-y-1 overflow-y-auto">
 								{#each unassignedUsers as user}
-									<div class="flex items-center justify-between rounded-md border px-3 py-2">
+									<div
+										class="flex items-center justify-between rounded-md border px-3 py-2"
+									>
 										<span class="text-sm">{user.username}</span>
 										<Button
 											variant="ghost"

@@ -3,18 +3,21 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { page } from '$app/stores';
-	import { networks } from '$lib/api/client.js';
+	import { networks, admin } from '$lib/api/client.js';
 	import { formatFileSize, formatDate, getDirectoryPath, getTagType, getTagColor, saveTablePref, buildOwnerOptions } from '$lib/utils.js';
 	import { restoreTableState, buildTableURL, clampPage } from '$lib/table-url-state.js';
-	import Pagination from '$lib/components/Pagination.svelte';
-	import { Network, FolderOpen } from 'lucide-svelte';
+	import { Network, FolderOpen, Loader2 } from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
-	import DataTable from '$lib/components/DataTable.svelte';
+	import * as Dialog from '$lib/components/ui/dialog';
+	import * as Select from '$lib/components/ui/select';
+	import { Label } from '$lib/components/ui/label';
+	import Button from '$lib/components/ui/button/button.svelte';
+	import PaginatedTable from '$lib/components/PaginatedTable.svelte';
 	import { createColumns } from './components/columns.js';
 	import { authStore } from '$lib/stores/auth.svelte.js';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import TableSkeleton from '$lib/components/TableSkeleton.svelte';
-	import type { Network as NetworkType, User, ApiError } from '$lib/types.js';
+	import type { Network as NetworkType, User, NetworkUpdate, ApiError } from '$lib/types.js';
 	import type { FilterState, FilterCategory } from '$lib/components/ui/filter-dialog';
 	import type { ColumnDef, SortingState, VisibilityState, Row } from '@tanstack/table-core';
 
@@ -26,8 +29,15 @@
 	let networksList = $state<NetworkType[]>([]);
 	let loading = $state(true);
 	let totalNetworks = $state(0);
-	let deletingId = $state<string | null>(null);  // Track which network is being deleted
-	let updatingVisibilityId = $state<string | null>(null);  // Track which network visibility is being updated
+	let deletingId = $state<string | null>(null);
+	let updatingVisibilityId = $state<string | null>(null);
+
+	// Admin: owner reassignment dialog
+	let editDialogOpen = $state(false);
+	let editNetwork = $state<NetworkType | null>(null);
+	let editOwner = $state<string | undefined>(undefined);
+	let allUsers = $state<User[]>([]);
+	let saving = $state(false);
 
 	// Filter state (unified)
 	let filters = $state<{ search: string; owners: Set<string> }>({
@@ -66,8 +76,8 @@
 	// Columns config - only recreate when authEnabled changes
 	// Use getters for dynamic values to avoid recreating columns on every state change
 	const columns = $derived.by(() => {
-		// Only depend on authEnabled for conditional columns
 		const authEnabled = authStore.authEnabled ?? false;
+		const isAdmin = authStore.isAdmin ?? false;
 		return createColumns({
 			getDirectoryPath,
 			getTagType,
@@ -78,8 +88,9 @@
 			toggleComponentsExpanded,
 			getExpandedComponents: () => expandedComponents,
 			handleVisibilityToggle,
-			canEditVisibility,
+			canEditNetwork,
 			authEnabled,
+			handleOwnerChange: isAdmin ? openOwnerDialog : undefined,
 			getDeletingId: () => deletingId,
 			getUpdatingVisibilityId: () => updatingVisibilityId
 		});
@@ -187,13 +198,17 @@
 	}
 
 	async function handleDelete(networkId: string) {
-		if (deletingId) return;  // Prevent double-click
+		if (deletingId) return;
 		if (!confirm('Are you sure you want to delete this network? This will remove both the database record and the file from disk. This action cannot be undone.')) {
 			return;
 		}
 		deletingId = networkId;
 		try {
-			await networks.delete(networkId);
+			if (authStore.isAdmin) {
+				await admin.deleteNetwork(networkId);
+			} else {
+				await networks.delete(networkId);
+			}
 			await loadNetworks();
 		} catch (err) {
 			if (!(err as ApiError).cancelled) toast.error((err as Error).message);
@@ -203,15 +218,52 @@
 	}
 
 	async function handleVisibilityToggle(networkId: string, newVisibility: "public" | "private") {
-		if (updatingVisibilityId) return;  // Prevent double-click
+		if (updatingVisibilityId) return;
 		updatingVisibilityId = networkId;
 		try {
-			await networks.updateVisibility(networkId, newVisibility);
+			if (authStore.isAdmin) {
+				await admin.updateNetwork(networkId, { visibility: newVisibility });
+			} else {
+				await networks.updateVisibility(networkId, newVisibility);
+			}
 			await loadNetworks();
 		} catch (err) {
 			if (!(err as ApiError).cancelled) toast.error((err as Error).message);
 		} finally {
 			updatingVisibilityId = null;
+		}
+	}
+
+	async function openOwnerDialog(network: NetworkType) {
+		if (!authStore.isAdmin) return;
+		editNetwork = network;
+		editOwner = network.owner.id;
+		editDialogOpen = true;
+		if (allUsers.length === 0) {
+			try {
+				const response = await admin.listUsers(0, 1000);
+				allUsers = response.data;
+			} catch (err) {
+				toast.error(`Failed to load users: ${(err as Error).message}`);
+			}
+		}
+	}
+
+	async function saveOwnerChange() {
+		if (!editNetwork || saving) return;
+		if (editOwner === editNetwork.owner.id) {
+			editDialogOpen = false;
+			return;
+		}
+		saving = true;
+		try {
+			await admin.updateNetwork(editNetwork.id, { user_id: editOwner });
+			await loadNetworks();
+			editDialogOpen = false;
+		} catch (err) {
+			toast.error(`Failed to update owner: ${(err as Error).message}`);
+		} finally {
+			saving = false;
 		}
 	}
 
@@ -228,10 +280,9 @@
 		expandedComponents = expandedComponents;
 	}
 
-	function canEditVisibility(network: NetworkType) {
+	function canEditNetwork(network: NetworkType) {
 		if (!authStore.authEnabled || !authStore.user) return false;
-		// Only owner can edit - admin powers are on /admin/networks
-		return network.owner.id === authStore.user.id;
+		return authStore.isAdmin || network.owner.id === authStore.user.id;
 	}
 
 </script>
@@ -261,27 +312,62 @@
 		{:else if viewState === 'no-matches'}
 			<EmptyState icon={FolderOpen} title="No Results" description="No networks match your current filters." />
 		{:else}
-			<DataTable
+			<PaginatedTable
+				mode="server"
 				data={networksList}
 				columns={columns as any}
 				totalItems={totalNetworks}
+				{currentPage}
 				{pageSize}
 				bind:sorting
 				bind:columnVisibility
 				globalFilter={filters.search}
 				globalFilterFn={networkFilterFn as any}
+				onPageChange={handlePageChange}
+				onPageSizeChange={handlePageSizeChange}
 				onRowClick={(network) => viewNetwork(network.id)}
 			/>
-
-			<div class="mt-6">
-				<Pagination
-					{currentPage}
-					{pageSize}
-					totalItems={totalNetworks}
-					onPageChange={handlePageChange}
-					onPageSizeChange={handlePageSizeChange}
-				/>
-			</div>
 		{/if}
 	</div>
 </div>
+
+<!-- Admin: Change Owner Dialog -->
+<Dialog.Root bind:open={editDialogOpen}>
+	<Dialog.Content class="max-w-xs">
+		{#if editNetwork}
+			<Dialog.Header>
+				<Dialog.Title>Change Owner</Dialog.Title>
+				<Dialog.Description class="text-xs text-muted-foreground">
+					{editNetwork.filename}
+				</Dialog.Description>
+			</Dialog.Header>
+			<div class="space-y-4 py-4">
+				<div class="space-y-2">
+					<Label class="text-xs">Owner</Label>
+					<Select.Root type="single" name="owner" bind:value={editOwner}>
+						<Select.Trigger class="w-full">
+							{@const ownerUser = allUsers.find((u) => u.id === editOwner)}
+							{ownerUser?.username || 'Select owner...'}
+						</Select.Trigger>
+						<Select.Content>
+							{#each allUsers as user}
+								<Select.Item value={user.id}>{user.username}</Select.Item>
+							{/each}
+						</Select.Content>
+					</Select.Root>
+				</div>
+			</div>
+			<Dialog.Footer class="flex gap-2">
+				<Button variant="outline" size="sm" onclick={() => (editDialogOpen = false)} disabled={saving}>
+					Cancel
+				</Button>
+				<Button size="sm" onclick={saveOwnerChange} disabled={saving}>
+					{#if saving}
+						<Loader2 class="mr-1 size-4 animate-spin" />
+					{/if}
+					Save
+				</Button>
+			</Dialog.Footer>
+		{/if}
+	</Dialog.Content>
+</Dialog.Root>

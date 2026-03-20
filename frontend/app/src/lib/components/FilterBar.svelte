@@ -83,29 +83,31 @@
 	<div class="flex-1"></div>
 
 	<!-- Column Visibility -->
-	<DropdownMenu.Root>
-		<DropdownMenu.Trigger>
-			{#snippet child({ props }: { props: Record<string, unknown> })}
-				<Button variant="ghost" size="icon" class="h-8 w-8" {...props}>
-					<SlidersHorizontal class="h-4 w-4" />
-				</Button>
-			{/snippet}
-		</DropdownMenu.Trigger>
-		<DropdownMenu.Content align="end">
-			<DropdownMenu.Label>Toggle Columns</DropdownMenu.Label>
-			<DropdownMenu.Separator />
-			{#each columns as column}
-				{#if (column.accessorKey || column.id) && column.header}
-					{@const columnId = (column.id || column.accessorKey) as string}
-					{@const isVisible = columnVisibility[columnId] !== false}
-					<DropdownMenu.CheckboxItem
-						checked={isVisible}
-						onCheckedChange={(checked: boolean) => toggleColumn(columnId, checked)}
-					>
-						{column.header}
-					</DropdownMenu.CheckboxItem>
-				{/if}
-			{/each}
-		</DropdownMenu.Content>
-	</DropdownMenu.Root>
+	{#if columns.length > 0}
+		<DropdownMenu.Root>
+			<DropdownMenu.Trigger>
+				{#snippet child({ props }: { props: Record<string, unknown> })}
+					<Button variant="ghost" size="icon" class="h-8 w-8" {...props}>
+						<SlidersHorizontal class="h-4 w-4" />
+					</Button>
+				{/snippet}
+			</DropdownMenu.Trigger>
+			<DropdownMenu.Content align="end">
+				<DropdownMenu.Label>Toggle Columns</DropdownMenu.Label>
+				<DropdownMenu.Separator />
+				{#each columns as column}
+					{#if (column.accessorKey || column.id) && column.header}
+						{@const columnId = (column.id || column.accessorKey) as string}
+						{@const isVisible = columnVisibility[columnId] !== false}
+						<DropdownMenu.CheckboxItem
+							checked={isVisible}
+							onCheckedChange={(checked: boolean) => toggleColumn(columnId, checked)}
+						>
+							{column.header}
+						</DropdownMenu.CheckboxItem>
+					{/if}
+				{/each}
+			</DropdownMenu.Content>
+		</DropdownMenu.Root>
+	{/if}
 </div>

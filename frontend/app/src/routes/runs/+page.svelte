@@ -11,10 +11,9 @@
 	import type { FilterState, FilterCategory } from '$lib/components/ui/filter-dialog';
 	import type { SortingState, VisibilityState } from '@tanstack/table-core';
 	import FilterBar from '$lib/components/FilterBar.svelte';
-	import Pagination from '$lib/components/Pagination.svelte';
 	import { Play } from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
-	import DataTable from '$lib/components/DataTable.svelte';
+	import PaginatedTable from '$lib/components/PaginatedTable.svelte';
 	import { createColumns } from './components/columns.js';
 	import { authStore } from '$lib/stores/auth.svelte.js';
 	import EmptyState from '$lib/components/EmptyState.svelte';
@@ -245,25 +244,19 @@
 		{:else if viewState === 'no-matches'}
 			<EmptyState icon={Play} title="No Matching Runs" description="No runs match the current filters." />
 		{:else}
-			<DataTable
+			<PaginatedTable
+				mode="server"
 				data={runsList}
 				columns={columns as any}
 				totalItems={totalRuns}
+				{currentPage}
 				{pageSize}
 				bind:sorting
 				bind:columnVisibility
+				onPageChange={handlePageChange}
+				onPageSizeChange={handlePageSizeChange}
 				onRowClick={(run: RunSummary) => goto(`/runs/${run.id}`)}
 			/>
-
-			<div class="mt-6">
-				<Pagination
-					{currentPage}
-					{pageSize}
-					totalItems={totalRuns}
-					onPageChange={handlePageChange}
-					onPageSizeChange={handlePageSizeChange}
-				/>
-			</div>
 		{/if}
 	</div>
 </div>

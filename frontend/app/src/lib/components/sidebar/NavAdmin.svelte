@@ -1,26 +1,8 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { Users, Network, Server } from 'lucide-svelte';
+	import { Shield } from 'lucide-svelte';
 	import { authStore } from '$lib/stores/auth.svelte.js';
 	import * as Sidebar from '$lib/components/ui/sidebar';
-
-	const navItems = [
-		{
-			title: 'User Management',
-			url: '/admin/users',
-			icon: Users
-		},
-		{
-			title: 'Network Management',
-			url: '/admin/networks',
-			icon: Network
-		},
-		{
-			title: 'Backend Management',
-			url: '/admin/backends',
-			icon: Server
-		}
-	];
 
 	const currentPath = $derived($page.url.pathname);
 </script>
@@ -30,18 +12,19 @@
 		<Sidebar.GroupLabel>Administration</Sidebar.GroupLabel>
 		<Sidebar.GroupContent>
 			<Sidebar.Menu>
-				{#each navItems as item}
-					<Sidebar.MenuItem>
-						<Sidebar.MenuButton tooltipContent={item.title} isActive={currentPath === item.url}>
-							{#snippet child({ props }: { props: Record<string, unknown> })}
-								<a href={item.url} {...props}>
-									<item.icon />
-									<span>{item.title}</span>
-								</a>
-							{/snippet}
-						</Sidebar.MenuButton>
-					</Sidebar.MenuItem>
-				{/each}
+				<Sidebar.MenuItem>
+					<Sidebar.MenuButton
+						tooltipContent="Administration"
+						isActive={currentPath.startsWith('/admin')}
+					>
+						{#snippet child({ props }: { props: Record<string, unknown> })}
+							<a href="/admin" {...props}>
+								<Shield />
+								<span>Administration</span>
+							</a>
+						{/snippet}
+					</Sidebar.MenuButton>
+				</Sidebar.MenuItem>
 			</Sidebar.Menu>
 		</Sidebar.GroupContent>
 	</Sidebar.Group>
