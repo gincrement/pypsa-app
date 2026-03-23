@@ -55,6 +55,7 @@ services:
     volumes:
     - ../src:/app/src
     - ../data:/data
+    - ../alembic.ini:/app/alembic.ini:ro
     - ../frontend/app/package.json:/app/frontend/app/package.json:ro
     depends_on:
       postgres:
@@ -78,6 +79,7 @@ services:
     volumes:
     - ../src:/app/src
     - ../data:/data
+    - ../alembic.ini:/app/alembic.ini:ro
     depends_on:
       postgres:
         condition: service_healthy

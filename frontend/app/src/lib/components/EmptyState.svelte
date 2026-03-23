@@ -2,13 +2,13 @@
 	import * as Empty from '$lib/components/ui/empty';
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
-	let { icon, title, description }: { icon: any; title: string; description: string } = $props();
+	let { icon: Icon, title, description }: { icon: any; title: string; description: string } = $props();
 </script>
 
 <Empty.Root>
 	<Empty.Header>
 		<Empty.Media variant="icon">
-			<icon></icon>
+			<Icon />
 		</Empty.Media>
 		<Empty.Title>{title}</Empty.Title>
 		<Empty.Description>{description}</Empty.Description>

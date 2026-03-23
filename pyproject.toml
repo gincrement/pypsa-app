@@ -29,6 +29,7 @@ dependencies = [
     "itsdangerous",
     "httpx",
     "python-multipart",
+    "alembic",
 ]
 
 [project.optional-dependencies]
@@ -103,6 +104,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
+"src/pypsa_app/backend/alembic/**" = ["ALL"]
 "{test,tests,examples,doc,docs}/**" = [
     'ERA',      # eradicate
     'S',        # flake8-bandit

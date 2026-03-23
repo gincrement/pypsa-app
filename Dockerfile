@@ -50,7 +50,7 @@ COPY --from=builder --chown=appuser:appuser /root/.local/bin/uv /usr/local/bin/u
 COPY --from=builder --chown=appuser:appuser /app/.venv /app/.venv
 COPY --from=builder --chown=appuser:appuser /app/src /app/src
 
-COPY --chown=appuser:appuser pyproject.toml uv.lock MANIFEST.in ./
+COPY --chown=appuser:appuser pyproject.toml uv.lock MANIFEST.in alembic.ini ./
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 

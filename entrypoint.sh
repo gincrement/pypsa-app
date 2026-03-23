@@ -5,4 +5,6 @@ set -e
 mkdir -p /data
 chown -R appuser:appuser /data
 
+gosu appuser alembic upgrade head
+
 exec gosu appuser "$@"

@@ -26,7 +26,7 @@ from pypsa_app.backend.api.routes import (
     version,
 )
 from pypsa_app.backend.cache import cache_service
-from pypsa_app.backend.database import Base, SessionLocal, engine
+from pypsa_app.backend.database import SessionLocal, engine
 from pypsa_app.backend.models import SnakedispatchBackend, User, UserRole
 from pypsa_app.backend.services.backend_registry import backend_registry
 from pypsa_app.backend.services.run import SnakedispatchError
@@ -123,8 +123,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Ensure networks directory exists
     settings.networks_path.mkdir(parents=True, exist_ok=True)
 
-    # Auto-create database tables and verify connection
-    Base.metadata.create_all(bind=engine)
+    # Run database migrations
+    from alembic import command  # noqa: PLC0415
+    from alembic.config import Config  # noqa: PLC0415
+
+    alembic_ini = str(Path(__file__).resolve().parents[3] / "alembic.ini")  # noqa: ASYNC240
+    alembic_cfg = Config(alembic_ini)
+    command.upgrade(alembic_cfg, "head")
+
     db = SessionLocal()
     try:
         db.execute(text("SELECT 1"))
