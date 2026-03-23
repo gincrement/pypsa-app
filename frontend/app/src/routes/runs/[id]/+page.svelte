@@ -8,7 +8,8 @@
 	import type { Run, ApiError, OutputFile, RunNetwork, Workflow } from '$lib/types.js';
 	import { Button } from '$lib/components/ui/button';
 	import { Skeleton } from '$lib/components/ui/skeleton';
-	import { Terminal, RotateCw, X, Trash2, Loader2, MoreVertical, Settings2, ChevronRight, ExternalLink, FolderArchive, GitBranch, Clock, Calendar, Server } from 'lucide-svelte';
+	import { Terminal, RotateCw, X, Trash2, Loader2, MoreVertical, Settings2, ChevronRight, ExternalLink, FolderArchive, GitBranch, Clock, Calendar, Server, Globe, LockKeyhole } from 'lucide-svelte';
+	import { authStore } from '$lib/stores/auth.svelte.js';
 	import { breadcrumbStore } from '$lib/stores/breadcrumb.svelte.js';
 	import OutputFilesTree from '../components/OutputFilesTree.svelte';
 	import WorkflowSection from '../components/WorkflowSection.svelte';
@@ -27,6 +28,7 @@
 	let rerunning = $state(false);
 	let cancelling = $state(false);
 	let removing = $state(false);
+	let togglingVisibility = $state(false);
 	let configOpen = $state(false);
 	let logsOpen = $state(true);
 
@@ -101,7 +103,7 @@
 		}
 	});
 
-	const actionBusy = $derived(cancelling || rerunning || removing);
+	const actionBusy = $derived(cancelling || rerunning || removing || togglingVisibility);
 
 	const duration = $derived.by(() => {
 		if (!isTerminal) tick; // reference tick to force re-evaluation
@@ -283,6 +285,19 @@
 		goto('/runs');
 	});
 
+	const canEditRun = $derived(
+		run && authStore.user && (
+			authStore.user.permissions?.includes('runs:manage_all') ||
+			run.owner?.id === authStore.user.id
+		)
+	);
+
+	const handleToggleVisibility = () => runAction(v => togglingVisibility = v, async () => {
+		const newVis = run!.visibility === 'public' ? 'private' : 'public';
+		await runs.updateVisibility(run!.id, newVis);
+		run = await runs.get(runId);
+	});
+
 	function scrollToBottom() {
 		requestAnimationFrame(() => {
 			if (logContainer) {
@@ -356,6 +371,17 @@
 										Rerun
 									</DropdownMenu.Item>
 								{/if}
+								{#if canEditRun}
+									<DropdownMenu.Item onclick={handleToggleVisibility} disabled={actionBusy}>
+										{#if run?.visibility === 'public'}
+											<LockKeyhole class="h-4 w-4 mr-2" />
+											Make private
+										{:else}
+											<Globe class="h-4 w-4 mr-2" />
+											Make public
+										{/if}
+									</DropdownMenu.Item>
+								{/if}
 								<DropdownMenu.Separator />
 								<DropdownMenu.Item onclick={handleRemove} disabled={actionBusy} class="text-destructive focus:text-destructive">
 									<Trash2 class="h-4 w-4 mr-2" />
@@ -391,6 +417,18 @@
 						<Server class="h-3.5 w-3.5" />
 						<span>{run.backend.name}</span>
 					</div>
+					{#if authStore.authEnabled}
+						<div class="h-4 w-px bg-border"></div>
+						<div class="flex items-center gap-1.5">
+							{#if run.visibility === 'public'}
+								<Globe class="h-3.5 w-3.5" />
+								<span>Public</span>
+							{:else}
+								<LockKeyhole class="h-3.5 w-3.5" />
+								<span>Private</span>
+							{/if}
+						</div>
+					{/if}
 					{#if run.networks.length > 0}
 						<div class="h-4 w-px bg-border"></div>
 						<div class="flex items-center gap-1.5">

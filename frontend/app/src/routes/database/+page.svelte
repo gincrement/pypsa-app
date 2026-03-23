@@ -17,7 +17,7 @@
 	import { authStore } from '$lib/stores/auth.svelte.js';
 	import EmptyState from '$lib/components/EmptyState.svelte';
 	import TableSkeleton from '$lib/components/TableSkeleton.svelte';
-	import type { Network as NetworkType, User, NetworkUpdate, ApiError } from '$lib/types.js';
+	import type { Network as NetworkType, User, NetworkUpdate, ApiError, Visibility } from '$lib/types.js';
 	import type { FilterState, FilterCategory } from '$lib/components/ui/filter-dialog';
 	import type { ColumnDef, SortingState, VisibilityState, Row } from '@tanstack/table-core';
 
@@ -217,7 +217,7 @@
 		}
 	}
 
-	async function handleVisibilityToggle(networkId: string, newVisibility: "public" | "private") {
+	async function handleVisibilityToggle(networkId: string, newVisibility: Visibility) {
 		if (updatingVisibilityId) return;
 		updatingVisibilityId = networkId;
 		try {

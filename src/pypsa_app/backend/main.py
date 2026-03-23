@@ -12,7 +12,6 @@ from sqlalchemy import text
 from starlette.middleware.sessions import SessionMiddleware
 
 from pypsa_app.backend.__version__ import __description__, __version__
-from pypsa_app.backend.api.deps import set_auth_disabled_user
 from pypsa_app.backend.api.routes import (
     admin,
     api_keys,
@@ -25,6 +24,7 @@ from pypsa_app.backend.api.routes import (
     tasks,
     version,
 )
+from pypsa_app.backend.auth.authenticate import set_auth_disabled_user
 from pypsa_app.backend.cache import cache_service
 from pypsa_app.backend.database import SessionLocal, engine
 from pypsa_app.backend.models import SnakedispatchBackend, User, UserRole

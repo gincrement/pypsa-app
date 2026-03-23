@@ -4,9 +4,9 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
-from pypsa_app.backend.models import NetworkVisibility
+from pypsa_app.backend.models import Visibility
 from pypsa_app.backend.schemas.auth import UserPublicResponse
 from pypsa_app.backend.schemas.common import PaginationMeta
 
@@ -30,14 +30,14 @@ class NetworkResponse(BaseModel):
     facets: dict[str, Any] | None = None
 
     # Ownership, visibility and provenance
-    visibility: NetworkVisibility = NetworkVisibility.PRIVATE
+    visibility: Visibility = Visibility.PRIVATE
     owner: UserPublicResponse
     source_run_id: UUID | None = None
 
     # Model properties
     tags: list[str | dict] | None = None
 
-    model_config = {"from_attributes": True}
+    model_config = ConfigDict(from_attributes=True)
 
 
 class NetworkListMeta(PaginationMeta):
@@ -54,7 +54,7 @@ class NetworkListResponse(BaseModel):
 class NetworkUpdate(BaseModel):
     """Fields any network owner can update"""
 
-    visibility: NetworkVisibility | None = None
+    visibility: Visibility | None = None
     name: str | None = None
 
 

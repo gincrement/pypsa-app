@@ -87,9 +87,7 @@ def upgrade() -> None:
                 sa.TIMESTAMP(),
                 server_default=sa.text("(CURRENT_TIMESTAMP)"),
             ),
-            sa.ForeignKeyConstraint(
-                ["user_id"], ["users.id"], ondelete="CASCADE"
-            ),
+            sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
             sa.PrimaryKeyConstraint("id"),
             sa.UniqueConstraint(
                 "provider", "provider_id", name="uq_provider_provider_id"
@@ -116,26 +114,20 @@ def upgrade() -> None:
             ),
             sa.Column("last_used_at", sa.TIMESTAMP(), nullable=True),
             sa.Column("expires_at", sa.TIMESTAMP(), nullable=True),
-            sa.ForeignKeyConstraint(
-                ["user_id"], ["users.id"], ondelete="CASCADE"
-            ),
+            sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
             sa.PrimaryKeyConstraint("id"),
         )
         op.create_index(
             op.f("ix_api_keys_key_hash"), "api_keys", ["key_hash"], unique=True
         )
-        op.create_index(
-            op.f("ix_api_keys_user_id"), "api_keys", ["user_id"]
-        )
+        op.create_index(op.f("ix_api_keys_user_id"), "api_keys", ["user_id"])
 
     if "user_backends" not in existing_tables:
         op.create_table(
             "user_backends",
             sa.Column("user_id", sa.Uuid(), nullable=False),
             sa.Column("backend_id", sa.Uuid(), nullable=False),
-            sa.ForeignKeyConstraint(
-                ["user_id"], ["users.id"], ondelete="CASCADE"
-            ),
+            sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
             sa.ForeignKeyConstraint(
                 ["backend_id"],
                 ["snakedispatch_backends.id"],
@@ -185,9 +177,7 @@ def upgrade() -> None:
             sa.Column("import_networks", sa.JSON(), nullable=True),
             sa.Column("total_job_count", sa.Integer(), nullable=True),
             sa.Column("jobs_finished", sa.Integer(), nullable=True),
-            sa.ForeignKeyConstraint(
-                ["user_id"], ["users.id"], ondelete="CASCADE"
-            ),
+            sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
             sa.ForeignKeyConstraint(
                 ["backend_id"],
                 ["snakedispatch_backends.id"],
@@ -231,9 +221,7 @@ def upgrade() -> None:
             sa.Column("meta", sa.JSON(), nullable=True),
             sa.Column("facets", sa.JSON(), nullable=True),
             sa.Column("topology_svg", sa.Text(), nullable=True),
-            sa.ForeignKeyConstraint(
-                ["user_id"], ["users.id"], ondelete="CASCADE"
-            ),
+            sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
             sa.ForeignKeyConstraint(
                 ["source_run_id"], ["runs.job_id"], ondelete="SET NULL"
             ),
@@ -243,9 +231,7 @@ def upgrade() -> None:
         op.create_index(
             op.f("ix_networks_source_run_id"), "networks", ["source_run_id"]
         )
-        op.create_index(
-            op.f("ix_networks_visibility"), "networks", ["visibility"]
-        )
+        op.create_index(op.f("ix_networks_visibility"), "networks", ["visibility"])
         op.create_index(
             op.f("ix_networks_file_path"),
             "networks",

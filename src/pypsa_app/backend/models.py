@@ -101,8 +101,8 @@ class Permission(enum.StrEnum):
     SYSTEM_MANAGE = "system:manage"
 
 
-class NetworkVisibility(enum.StrEnum):
-    """Network visibility options for access control"""
+class Visibility(enum.StrEnum):
+    """Resource visibility options for access control"""
 
     PUBLIC = "public"
     PRIVATE = "private"
@@ -216,9 +216,9 @@ class Network(Base):
 
     # Visibility
     # public (all users) or private (owner only)
-    visibility = mapped_column(
-        str_enum(NetworkVisibility, "network_visibility"),
-        default=NetworkVisibility.PRIVATE,
+    visibility: Mapped[Visibility] = mapped_column(
+        str_enum(Visibility, "visibility"),
+        default=Visibility.PRIVATE,
         nullable=False,
         index=True,
     )
@@ -295,6 +295,12 @@ class Run(Base):
     cache: Mapped[Any | None] = mapped_column(JSON)
 
     callback_url: Mapped[str | None] = mapped_column(String(512))
+    visibility: Mapped[Visibility] = mapped_column(
+        str_enum(Visibility, "visibility"),
+        default=Visibility.PRIVATE,
+        nullable=False,
+        index=True,
+    )
 
     # Job metadata (synced from Snakedispatch)
     git_ref: Mapped[str | None] = mapped_column(String(255))

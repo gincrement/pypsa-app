@@ -15,6 +15,7 @@ import type {
 	NetworkFilters,
 	NetworkUpdate,
 	OutputFile,
+	Visibility,
 	PaginatedResponse,
 	Workflow,
 } from "$lib/types.js";
@@ -126,7 +127,7 @@ export const networks = {
 	async delete(id: string): Promise<void> {
 		return request<void>(`/networks/${id}`, { method: 'DELETE' });
 	},
-	async updateVisibility(id: string, visibility: "public" | "private"): Promise<Network> {
+	async updateVisibility(id: string, visibility: Visibility): Promise<Network> {
 		return request<Network>(`/networks/${id}`, {
 			method: 'PATCH',
 			body: JSON.stringify({ visibility })
@@ -277,6 +278,12 @@ export const runs = {
 	async remove(id: string): Promise<void> {
 		return request<void>(`/runs/${id}`, { method: 'DELETE' });
 	},
+	async updateVisibility(id: string, visibility: Visibility): Promise<RunSummary> {
+		return request<RunSummary>(`/runs/${id}`, {
+			method: 'PATCH',
+			body: JSON.stringify({ visibility })
+		});
+	},
 	logsUrl(id: string): string {
 		return `${API_BASE}/runs/${id}/logs`;
 	},
@@ -368,6 +375,24 @@ export const admin = {
 
 	async deleteNetwork(networkId: string): Promise<void> {
 		return request<void>(`/admin/networks/${networkId}`, { method: 'DELETE' });
+	},
+
+	async listRuns(skip = 0, limit = 100, filters: { visibility?: string; owner?: string } = {}): Promise<PaginatedResponse<RunSummary>> {
+		let url = `/admin/runs?skip=${skip}&limit=${limit}`;
+		if (filters.visibility) url += `&visibility=${filters.visibility}`;
+		if (filters.owner) url += `&owner=${filters.owner}`;
+		return request<PaginatedResponse<RunSummary>>(url);
+	},
+
+	async updateRun(runId: string, updates: { visibility?: Visibility; user_id?: string }): Promise<Run> {
+		return request<Run>(`/admin/runs/${runId}`, {
+			method: 'PATCH',
+			body: JSON.stringify(updates)
+		});
+	},
+
+	async deleteRun(runId: string): Promise<void> {
+		return request<void>(`/admin/runs/${runId}`, { method: 'DELETE' });
 	},
 
 	async getPermissions(): Promise<Record<string, unknown>> {

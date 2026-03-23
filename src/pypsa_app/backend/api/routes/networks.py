@@ -1,28 +1,23 @@
 import logging
 import uuid as _uuid
 from pathlib import PurePosixPath
-from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
-from fastapi import Path as PathParam
 from pydantic import BaseModel
 from sqlalchemy import ColumnElement, or_
 from sqlalchemy.orm import Session, joinedload
 
 from pypsa_app.backend.api.deps import (
-    get_accessible_network,
+    Authorized,
     get_db,
+    require_network,
     require_permission,
 )
 from pypsa_app.backend.api.utils.network_utils import (
     delete_network as delete_network_and_file,
 )
-from pypsa_app.backend.models import Network, NetworkVisibility, Permission, User
-from pypsa_app.backend.permissions import (
-    can_access_network,
-    can_modify_network,
-    has_permission,
-)
+from pypsa_app.backend.models import Network, Permission, User, Visibility
+from pypsa_app.backend.permissions import has_permission
 from pypsa_app.backend.schemas.common import MessageResponse
 from pypsa_app.backend.schemas.network import (
     NetworkListResponse,
@@ -113,7 +108,7 @@ def list_networks(
         # Non-admin users see: own networks + public
         visibility_filter = or_(
             Network.user_id == user.id,
-            Network.visibility == NetworkVisibility.PUBLIC,
+            Network.visibility == Visibility.PUBLIC,
         )
         query = query.filter(visibility_filter)
 
@@ -162,47 +157,20 @@ def list_networks(
 
 @router.get("/{network_id}", response_model=NetworkResponse)
 def get_network(
-    network_id: UUID = PathParam(..., description="Network UUID"),
-    db: Session = Depends(get_db),
-    user: User = Depends(require_permission(Permission.NETWORKS_VIEW)),
+    auth: Authorized[Network] = Depends(require_network("read")),
 ) -> Network:
     """Get network by ID with owner info"""
-    network = (
-        db.query(Network)
-        .options(joinedload(Network.owner))
-        .filter(Network.id == network_id)
-        .first()
-    )
-
-    if not network:
-        raise HTTPException(404, "Network not found")
-
-    if not can_access_network(user, network):
-        raise HTTPException(404, "Network not found")
-
-    return network
+    return auth.model
 
 
 @router.patch("/{network_id}", response_model=NetworkResponse)
 def update_network(
-    network_id: UUID = PathParam(..., description="Network UUID"),
-    body: NetworkUpdate = ...,
+    body: NetworkUpdate,
+    auth: Authorized[Network] = Depends(require_network("modify")),
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission(Permission.NETWORKS_MODIFY)),
 ) -> Network:
     """Update network properties. Only owner or admin can update."""
-    network = (
-        db.query(Network)
-        .options(joinedload(Network.owner))
-        .filter(Network.id == network_id)
-        .first()
-    )
-
-    if not network:
-        raise HTTPException(404, "Network not found")
-
-    if not can_modify_network(user, network):
-        raise HTTPException(403, "You can only update your own networks")
+    network = auth.model
 
     if body.visibility is not None:
         network.visibility = body.visibility
@@ -216,7 +184,7 @@ def update_network(
         "Network updated",
         extra={
             "network_id": str(network.id),
-            "updated_by": user.username,
+            "updated_by": auth.user.username,
         },
     )
 
@@ -225,13 +193,9 @@ def update_network(
 
 @router.delete("/{network_id}", response_model=MessageResponse)
 def delete_network(
-    network: Network = Depends(get_accessible_network),
+    auth: Authorized[Network] = Depends(require_network("modify")),
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission(Permission.NETWORKS_MODIFY)),
 ) -> dict:
     """Delete network from database and file system"""
-    if not can_modify_network(user, network):
-        raise HTTPException(403, "You don't have permission to delete this network")
-
-    message = delete_network_and_file(network, db)
+    message = delete_network_and_file(auth.model, db)
     return {"message": message}

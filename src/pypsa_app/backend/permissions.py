@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from pypsa_app.backend.models import NetworkVisibility, Permission, UserRole
+from pypsa_app.backend.models import Network, Permission, Run, UserRole, Visibility
 
 if TYPE_CHECKING:
-    from pypsa_app.backend.models import Network, Run, User
+    from pypsa_app.backend.models import User
 
 
-ROLE_PERMISSIONS: dict[UserRole, set[Permission]] = {
+_ROLE_PERMISSIONS: dict[UserRole, set[Permission]] = {
     UserRole.ADMIN: {
         Permission.NETWORKS_VIEW,
         Permission.NETWORKS_MODIFY,
@@ -37,40 +38,50 @@ ROLE_PERMISSIONS: dict[UserRole, set[Permission]] = {
 }
 
 
-def get_permissions_for_role(role: UserRole) -> set[Permission]:
-    return ROLE_PERMISSIONS.get(role, set())
+def get_role_permissions() -> dict[UserRole, set[Permission]]:
+    return _ROLE_PERMISSIONS
 
 
 def get_user_permissions(user: User) -> set[Permission]:
-    return get_permissions_for_role(user.role)
+    return _ROLE_PERMISSIONS.get(user.role, set())
 
 
 def has_permission(user: User, permission: Permission) -> bool:
     return permission in get_user_permissions(user)
 
 
-def can_access_network(user: User, network: Network) -> bool:
-    is_public = network.visibility == NetworkVisibility.PUBLIC
-    is_owner = network.user_id == user.id
-    is_admin = has_permission(user, Permission.NETWORKS_MANAGE_ALL)
-    return is_public or is_owner or is_admin
+@dataclass(frozen=True)
+class ResourcePerms:
+    view: Permission
+    modify: Permission
+    manage_all: Permission
 
 
-def can_modify_network(user: User, network: Network) -> bool:
-    is_owner = network.user_id == user.id
-    is_admin = has_permission(user, Permission.NETWORKS_MANAGE_ALL)
-    return is_owner or is_admin
+RESOURCE_PERMS: dict[type, ResourcePerms] = {
+    Network: ResourcePerms(
+        Permission.NETWORKS_VIEW,
+        Permission.NETWORKS_MODIFY,
+        Permission.NETWORKS_MANAGE_ALL,
+    ),
+    Run: ResourcePerms(
+        Permission.RUNS_VIEW,
+        Permission.RUNS_MODIFY,
+        Permission.RUNS_MANAGE_ALL,
+    ),
+}
 
 
-def can_access_run(user: User, run: Run) -> bool:
-    """Check if user can view this run."""
-    is_owner = run.user_id == user.id
-    is_admin = has_permission(user, Permission.RUNS_MANAGE_ALL)
-    return is_owner or is_admin
+def can_access(user: User, resource: Network | Run) -> bool:
+    """Can user view this resource? True if public, owner, or admin."""
+    perms = RESOURCE_PERMS[type(resource)]
+    return (
+        resource.visibility == Visibility.PUBLIC
+        or resource.user_id == user.id
+        or has_permission(user, perms.manage_all)
+    )
 
 
-def can_modify_run(user: User, run: Run) -> bool:
-    """Check if user can cancel/remove this run."""
-    is_owner = run.user_id == user.id
-    is_admin = has_permission(user, Permission.RUNS_MANAGE_ALL)
-    return is_owner or is_admin
+def can_modify(user: User, resource: Network | Run) -> bool:
+    """Can user modify this resource? True if owner or admin."""
+    perms = RESOURCE_PERMS[type(resource)]
+    return resource.user_id == user.id or has_permission(user, perms.manage_all)

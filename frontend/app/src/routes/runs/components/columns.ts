@@ -5,20 +5,24 @@ import TextWithTitleCell from '../cells/text-with-title-cell.svelte';
 import WorkflowCell from '../cells/workflow-cell.svelte';
 import JobsCell from '../cells/jobs-cell.svelte';
 import ActionsCell from '$lib/components/cells/ActionsCell.svelte';
-import { X, Trash2, RotateCw } from 'lucide-svelte';
+import VisibilityCell from '$lib/components/cells/VisibilityCell.svelte';
+import { X, Trash2, RotateCw, LockKeyhole, Globe } from 'lucide-svelte';
 import OwnerCell from '$lib/components/OwnerCell.svelte';
 import type { ColumnDef } from '@tanstack/table-core';
 import { RUN_SETTLED_STATUSES } from '$lib/types.js';
-import type { RunSummary } from '$lib/types.js';
+import type { RunSummary, Visibility } from '$lib/types.js';
 
 interface RunsColumnsHelpers {
 	formatRelativeTime: (dateString: string | null | undefined) => string;
 	handleCancel: (id: string) => void;
 	handleRemove: (id: string) => void;
 	handleRerun: (run: RunSummary) => void;
+	handleVisibilityToggle: (id: string, visibility: Visibility) => void;
+	canEditRun: (run: RunSummary) => boolean;
 	authEnabled: boolean;
 	getCancellingId?: () => string | null;
 	getRemovingId?: () => string | null;
+	getUpdatingVisibilityId?: () => string | null;
 	getTick?: () => number;
 }
 
@@ -28,9 +32,12 @@ export const createColumns = (helpers: RunsColumnsHelpers): ColumnDef<RunSummary
 		handleCancel,
 		handleRemove,
 		handleRerun,
+		handleVisibilityToggle,
+		canEditRun,
 		authEnabled,
 		getCancellingId = () => null,
 		getRemovingId = () => null,
+		getUpdatingVisibilityId = () => null,
 		getTick = () => 0
 	} = helpers;
 
@@ -117,6 +124,19 @@ export const createColumns = (helpers: RunsColumnsHelpers): ColumnDef<RunSummary
 		...(authEnabled
 			? [
 					{
+						accessorKey: 'visibility',
+						header: 'Visibility',
+						enableSorting: true,
+						cell: (info: { row: { original: RunSummary } }) => {
+							const run = info.row.original;
+							return renderComponent(VisibilityCell, {
+								item: run,
+								canEdit: canEditRun(run),
+								onToggle: handleVisibilityToggle
+							});
+						}
+					},
+					{
 						accessorKey: 'owner',
 						header: 'Owner',
 						enableSorting: false,
@@ -136,6 +156,9 @@ export const createColumns = (helpers: RunsColumnsHelpers): ColumnDef<RunSummary
 				const isSettled = RUN_SETTLED_STATUSES.has(run.status);
 				const isCancelling = getCancellingId() === run.id;
 				const isRemoving = getRemovingId() === run.id;
+				const isUpdatingVisibility = getUpdatingVisibilityId() === run.id;
+				const isPublic = run.visibility === 'public';
+				const canEdit = canEditRun(run);
 				const actions = [];
 				if (!isSettled) {
 					actions.push({
@@ -150,6 +173,15 @@ export const createColumns = (helpers: RunsColumnsHelpers): ColumnDef<RunSummary
 						icon: RotateCw,
 						label: 'Rerun',
 						onclick: () => handleRerun(run)
+					});
+				}
+				if (authEnabled && canEdit) {
+					actions.push({
+						icon: isPublic ? LockKeyhole : Globe,
+						label: isPublic ? 'Make private' : 'Make public',
+						onclick: () => handleVisibilityToggle(run.id, isPublic ? 'private' : 'public'),
+						loading: isUpdatingVisibility,
+						loadingLabel: 'Updating...'
 					});
 				}
 				actions.push({

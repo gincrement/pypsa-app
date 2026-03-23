@@ -1,18 +1,18 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
-	import { Share2, Lock } from 'lucide-svelte';
+	import { Globe, LockKeyhole } from 'lucide-svelte';
 	import * as Tooltip from '$lib/components/ui/tooltip';
-	import type { Network } from '$lib/types.js';
+	import type { Visibility } from '$lib/types.js';
 
-	let { network, canEdit, onToggle }: {
-		network: Network;
+	let { item, canEdit, onToggle }: {
+		item: { id: string; visibility: Visibility; owner?: { id: string } | null };
 		canEdit: boolean;
-		onToggle: (id: string, visibility: 'public' | 'private') => void;
+		onToggle: (id: string, visibility: Visibility) => void;
 	} = $props();
 
-	const isSystem = $derived(!network.owner);
-	const isPublic = $derived(network.visibility === 'public');
-	const Icon = $derived(isPublic ? Share2 : Lock);
+	const isSystem = $derived(!item.owner);
+	const isPublic = $derived(item.visibility === 'public');
+	const Icon = $derived(isPublic ? Globe : LockKeyhole);
 	const iconClass = 'h-4 w-4 text-muted-foreground';
 </script>
 
@@ -28,7 +28,7 @@
 							variant="ghost"
 							size="sm"
 							class="h-8 w-8 p-0"
-							onclick={() => onToggle(network.id, isPublic ? 'private' : 'public')}
+							onclick={() => onToggle(item.id, isPublic ? 'private' : 'public')}
 							{...props}
 						>
 							<Icon class={iconClass} />
@@ -41,7 +41,7 @@
 				{/snippet}
 			</Tooltip.Trigger>
 			<Tooltip.Content>
-				{isPublic ? 'Visible to all users' : 'Only visible to you'}
+				{isPublic ? 'Visible to all users' : 'Only visible to the owner'}
 			</Tooltip.Content>
 		</Tooltip.Root>
 	</div>

@@ -9,7 +9,7 @@ import VisibilityCell from '$lib/components/cells/VisibilityCell.svelte';
 import { Lock, Globe, Trash2, UserRoundCog } from 'lucide-svelte';
 import OwnerCell from '$lib/components/OwnerCell.svelte';
 import type { ColumnDef } from '@tanstack/table-core';
-import type { Network, NetworkTag, TagType, TagColor } from '$lib/types.js';
+import type { Network, NetworkTag, TagType, TagColor, Visibility } from '$lib/types.js';
 
 interface DatabaseColumnsHelpers {
 	getDirectoryPath: (fullPath: string | null | undefined) => string;
@@ -20,7 +20,7 @@ interface DatabaseColumnsHelpers {
 	handleDelete: (id: string) => void;
 	toggleComponentsExpanded: (id: string) => void;
 	getExpandedComponents: () => Set<string>;
-	handleVisibilityToggle: (id: string, visibility: "public" | "private") => void;
+	handleVisibilityToggle: (id: string, visibility: Visibility) => void;
 	canEditNetwork: (network: Network) => boolean;
 	authEnabled: boolean;
 	handleOwnerChange?: (network: Network) => void;
@@ -126,7 +126,7 @@ export const createColumns = (helpers: DatabaseColumnsHelpers): ColumnDef<Networ
 						cell: (info: { row: { original: Network } }) => {
 							const network = info.row.original;
 							return renderComponent(VisibilityCell, {
-								network,
+								item: network,
 								canEdit: canEditNetwork(network),
 								onToggle: handleVisibilityToggle
 							});

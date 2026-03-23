@@ -39,7 +39,7 @@ export interface Network {
 	filename: string;
 	file_path: string;
 	file_size?: number;
-	visibility: "public" | "private";
+	visibility: Visibility;
 	owner: User;
 	source_run_id?: string;
 	dimensions?: Record<string, number>;
@@ -51,6 +51,8 @@ export interface Network {
 	created_at?: string;
 	updated_at?: string;
 }
+
+export type Visibility = "public" | "private";
 
 export interface BackendPublic {
 	id: string;
@@ -89,6 +91,7 @@ export interface RunSummary {
 	completed_at?: string;
 	created_at: string;
 	owner: User;
+	visibility: Visibility;
 	backend: BackendPublic;
 	total_job_count?: number;
 	jobs_finished?: number;
@@ -169,7 +172,7 @@ export interface NetworkFilters {
 }
 
 export interface NetworkUpdate {
-	visibility?: "public" | "private";
+	visibility?: Visibility;
 	user_id?: string;
 }
 

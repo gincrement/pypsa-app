@@ -12,9 +12,15 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import Path as PathParam
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
-from pypsa_app.backend.api.deps import get_db, require_permission
+from pypsa_app.backend.api.deps import (
+    Authorized,
+    get_db,
+    require_permission,
+    require_run,
+)
 from pypsa_app.backend.cache import cache
 from pypsa_app.backend.models import (
     Permission,
@@ -22,8 +28,9 @@ from pypsa_app.backend.models import (
     RunStatus,
     SnakedispatchBackend,
     User,
+    Visibility,
 )
-from pypsa_app.backend.permissions import can_access_run, can_modify_run, has_permission
+from pypsa_app.backend.permissions import has_permission
 from pypsa_app.backend.schemas.backend import BackendPublicResponse
 from pypsa_app.backend.schemas.common import MessageResponse
 from pypsa_app.backend.schemas.run import (
@@ -32,6 +39,7 @@ from pypsa_app.backend.schemas.run import (
     RunListResponse,
     RunResponse,
     RunSummary,
+    RunUpdate,
 )
 from pypsa_app.backend.services.backend_registry import backend_registry
 from pypsa_app.backend.services.callback import (
@@ -78,23 +86,6 @@ def _get_user_backends(user: User, db: Session) -> list[SnakedispatchBackend]:
     )
 
 
-def _check_run(run_id: uuid.UUID, db: Session, user: User) -> Run:
-    """Load run record with access check."""
-    run = (
-        db.query(Run)
-        .options(
-            joinedload(Run.owner), joinedload(Run.backend), joinedload(Run.networks)
-        )
-        .filter(Run.job_id == run_id)
-        .first()
-    )
-    if not run:
-        raise HTTPException(404, "Run not found")
-    if not can_access_run(user, run):
-        raise HTTPException(404, "Run not found")
-    return run
-
-
 @router.get("/backends", response_model=list[BackendPublicResponse])
 def list_user_backends(
     db: Session = Depends(get_db),
@@ -133,7 +124,13 @@ def create_run(
 
     payload = body.model_dump(
         exclude_none=True,
-        exclude={"backend_id", "import_networks", "cache", "callback_url"},
+        exclude={
+            "backend_id",
+            "import_networks",
+            "cache",
+            "callback_url",
+            "visibility",
+        },
     )
     if body.cache:
         payload["cache_key"] = body.cache.key
@@ -151,6 +148,7 @@ def create_run(
         cache=body.cache.model_dump() if body.cache else None,
         import_networks=body.import_networks,
         callback_url=str(body.callback_url) if body.callback_url else None,
+        visibility=body.visibility,
         status=RunStatus(result.get("status", "PENDING")),
     )
     db.add(run)
@@ -194,7 +192,14 @@ def list_runs(
 ) -> RunListResponse:
     """List runs visible to the current user."""
     is_admin = has_permission(user, Permission.RUNS_MANAGE_ALL)
-    user_filter = Run.user_id == user.id if not is_admin else None
+    user_filter = (
+        or_(
+            Run.user_id == user.id,
+            Run.visibility == Visibility.PUBLIC,
+        )
+        if not is_admin
+        else None
+    )
 
     # Collect distinct values per column for filter dropdowns
     def _distinct_vals(col: Any) -> list:
@@ -222,13 +227,10 @@ def list_runs(
         else None
     )
 
-    if is_admin:
-        owner_ids = _distinct_vals(Run.user_id)
-        filter_options["owners"] = (
-            db.query(User).filter(User.id.in_(owner_ids)).all() if owner_ids else None
-        )
-    else:
-        filter_options["owners"] = None
+    owner_ids = _distinct_vals(Run.user_id)
+    filter_options["owners"] = (
+        db.query(User).filter(User.id.in_(owner_ids)).all() if owner_ids else None
+    )
 
     query = db.query(Run).options(joinedload(Run.owner), joinedload(Run.backend))
     if user_filter is not None:
@@ -277,19 +279,17 @@ def list_runs(
 
 @router.get("/{run_id}", response_model=RunResponse)
 def get_run(
-    run_id: uuid.UUID = PathParam(..., description="Run UUID"),
+    auth: Authorized[Run] = Depends(require_run("read")),
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission(Permission.RUNS_VIEW)),
 ) -> RunResponse:
     """Get run detail."""
-    run = _check_run(run_id, db, user)
-
+    run = auth.model
     # Sync from Snakedispatch if not in terminal state
     if run.status not in SYNCED_STATUSES:
         client = backend_registry.get_client(run.backend_id)
         if client:
             try:
-                job = client.get_job(str(run_id))
+                job = client.get_job(str(run.job_id))
                 needs_callback = sync_run_from_job(run, job, db)
                 db.commit()
                 if needs_callback and run.callback_url:
@@ -308,25 +308,38 @@ def get_run(
     return RunResponse.model_validate(run)
 
 
+@router.patch("/{run_id}", response_model=RunResponse)
+def update_run(
+    body: RunUpdate,
+    auth: Authorized[Run] = Depends(require_run("modify")),
+    db: Session = Depends(get_db),
+) -> RunResponse:
+    """Update run properties. Only owner or admin can update."""
+    run = auth.model
+    if body.visibility is not None:
+        run.visibility = body.visibility
+    db.commit()
+    db.refresh(run)
+    return RunResponse.model_validate(run)
+
+
 @router.get("/{run_id}/logs")
 def stream_run_logs(
-    run_id: uuid.UUID = PathParam(..., description="Run UUID"),
+    auth: Authorized[Run] = Depends(require_run("read")),
     format: Literal["text"] | None = Query(
         None, description="'text' for plain text logs"
     ),
-    db: Session = Depends(get_db),
-    user: User = Depends(require_permission(Permission.RUNS_VIEW)),
 ) -> StreamingResponse:
     """Stream live logs via SSE, or plain text with ?format=text."""
-    run = _check_run(run_id, db, user)
+    run = auth.model
     sd_client = _get_client_for_run(run)
     if format == "text":
         return StreamingResponse(
-            sd_client.get_job_logs_text(str(run_id)),
+            sd_client.get_job_logs_text(str(run.job_id)),
             media_type="text/plain",
         )
     return StreamingResponse(
-        sd_client.subscribe_job_logs(str(run_id)),
+        sd_client.subscribe_job_logs(str(run.job_id)),
         media_type="text/event-stream",
     )
 
@@ -342,45 +355,39 @@ def _get_job_outputs_cached(job_id: str, backend_id: str) -> list[dict]:
 
 @router.get("/{run_id}/workflow")
 def get_run_workflow(
-    run_id: uuid.UUID = PathParam(..., description="Run UUID"),
-    db: Session = Depends(get_db),
-    user: User = Depends(require_permission(Permission.RUNS_VIEW)),
+    auth: Authorized[Run] = Depends(require_run("read")),
 ) -> dict:
     """Get workflow metadata (DAG, rules, jobs, errors) for a run."""
-    run = _check_run(run_id, db, user)
+    run = auth.model
     client = _get_client_for_run(run)
-    return client.get_job_workflow(str(run_id))
+    return client.get_job_workflow(str(run.job_id))
 
 
 @router.get("/{run_id}/outputs", response_model=list[OutputFileResponse])
 def list_run_outputs(
-    run_id: uuid.UUID = PathParam(..., description="Run UUID"),
-    db: Session = Depends(get_db),
-    user: User = Depends(require_permission(Permission.RUNS_VIEW)),
+    auth: Authorized[Run] = Depends(require_run("read")),
 ) -> list[dict]:
     """List output files for a completed run."""
-    run = _check_run(run_id, db, user)
-    return _get_job_outputs_cached(str(run_id), str(run.backend_id))
+    run = auth.model
+    return _get_job_outputs_cached(str(run.job_id), str(run.backend_id))
 
 
 @router.get("/{run_id}/outputs/{path:path}")
 def download_run_output(
-    run_id: uuid.UUID = PathParam(..., description="Run UUID"),
     path: str = PathParam(..., description="File path relative to work directory"),
     format: Literal["text"] | None = Query(
         None, description="'text' for inline plain text"
     ),
-    db: Session = Depends(get_db),
-    user: User = Depends(require_permission(Permission.RUNS_VIEW)),
+    auth: Authorized[Run] = Depends(require_run("read")),
 ) -> StreamingResponse:
     """Download an output file, or display inline with ?format=text."""
+    run = auth.model
     if ".." in PurePosixPath(path).parts:
         raise HTTPException(400, "Invalid path")
-    run = _check_run(run_id, db, user)
     sd_client = _get_client_for_run(run)
     if format == "text":
         return StreamingResponse(
-            sd_client.download_job_output(str(run_id), path),
+            sd_client.download_job_output(str(run.job_id), path),
             media_type="text/plain",
             headers={"Content-Disposition": "inline"},
         )
@@ -388,7 +395,7 @@ def download_run_output(
         re.sub(r'[\x00-\x1f\x7f"\\;]', "_", path.rsplit("/", 1)[-1])
     )
     return StreamingResponse(
-        sd_client.download_job_output(str(run_id), path),
+        sd_client.download_job_output(str(run.job_id), path),
         media_type="application/octet-stream",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
     )
@@ -396,18 +403,15 @@ def download_run_output(
 
 @router.post("/{run_id}/cancel", response_model=MessageResponse)
 def cancel_run(
-    run_id: uuid.UUID = PathParam(..., description="Run UUID"),
+    auth: Authorized[Run] = Depends(require_run("modify")),
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission(Permission.RUNS_MODIFY)),
 ) -> dict:
     """Cancel a running run. Keeps the record visible."""
-    run = _check_run(run_id, db, user)
-    if not can_modify_run(user, run):
-        raise HTTPException(403, "You don't have permission to cancel this run")
+    run = auth.model
 
     sd_client = _get_client_for_run(run)
     try:
-        result = sd_client.cancel_job(str(run_id))
+        result = sd_client.cancel_job(str(run.job_id))
         needs_callback = sync_run_from_job(run, result, db)
         db.commit()
         if needs_callback and run.callback_url:
@@ -439,8 +443,8 @@ def cancel_run(
     logger.info(
         "Run cancelled",
         extra={
-            "run_id": str(run_id),
-            "user": user.username,
+            "run_id": str(run.job_id),
+            "user": auth.user.username,
         },
     )
 
@@ -449,22 +453,21 @@ def cancel_run(
 
 @router.delete("/{run_id}", response_model=MessageResponse)
 def remove_run(
-    run_id: uuid.UUID = PathParam(..., description="Run UUID"),
+    auth: Authorized[Run] = Depends(require_run("modify")),
     db: Session = Depends(get_db),
-    user: User = Depends(require_permission(Permission.RUNS_MODIFY)),
 ) -> dict:
     """Remove a run, cancel if still active, and delete the DB row."""
-    run = _check_run(run_id, db, user)
-    if not can_modify_run(user, run):
-        raise HTTPException(403, "You don't have permission to remove this run")
+    run = auth.model
 
     # Try to clean up remotely but don't fail the request if it errors
     client = backend_registry.get_client(run.backend_id)
     if client:
         try:
-            client.delete_job(str(run_id))
+            client.delete_job(str(run.job_id))
         except Exception:
-            logger.warning("Remote cleanup failed for run %s", run_id, exc_info=True)
+            logger.warning(
+                "Remote cleanup failed for run %s", run.job_id, exc_info=True
+            )
 
     db.delete(run)
     db.commit()
@@ -472,8 +475,8 @@ def remove_run(
     logger.info(
         "Run removed",
         extra={
-            "run_id": str(run_id),
-            "user": user.username,
+            "run_id": str(run.job_id),
+            "user": auth.user.username,
         },
     )
 

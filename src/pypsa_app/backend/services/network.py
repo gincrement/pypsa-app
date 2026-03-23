@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 import pypsa
 
-from pypsa_app.backend.models import Network, Permission, User
+from pypsa_app.backend.models import Network, Permission, User, Visibility
 from pypsa_app.backend.permissions import has_permission
 from pypsa_app.backend.settings import settings
 from pypsa_app.backend.utils.path_validation import validate_path
@@ -211,18 +211,6 @@ class NetworkService:
         countries = network.buses["country"].dropna().unique()
         return sorted(countries)
 
-    def calculate_file_hash(self) -> str:
-        """Calculate SHA256 hash of the network file"""
-        if self.file_path is None:
-            msg = "Cannot calculate hash for network without file_path"
-            raise ValueError(msg)
-
-        sha256_hash = hashlib.sha256()
-        with self.file_path.open("rb") as f:
-            for byte_block in iter(lambda: f.read(4096), b""):
-                sha256_hash.update(byte_block)
-        return sha256_hash.hexdigest()
-
     def get_file_size(self) -> int:
         """Get file size in bytes"""
         if self.file_path is None:
@@ -259,14 +247,6 @@ class NetworkCollectionService:
             list(networks.values()), index=list(networks.keys())
         )
 
-    def get_summary(self) -> dict:
-        """Get summary information about the collection"""
-        info = {}
-        info["collection_size"] = len(self.n.networks)
-        info["network_indices"] = list(self.n.index)
-
-        return info
-
     @staticmethod
     def _generate_unique_names_from_paths(file_paths: list[Path]) -> list[str]:
         """Generate unique names for networks based on file paths"""
@@ -296,6 +276,7 @@ def import_network_file(
     user_id: uuid.UUID,
     db: Session,
     source_run_id: uuid.UUID | None = None,
+    visibility: Visibility = Visibility.PRIVATE,
 ) -> Network:
     """Import a network file.
 
@@ -334,6 +315,7 @@ def import_network_file(
         id=network_id,
         user_id=user_id,
         source_run_id=source_run_id,
+        visibility=visibility,
         filename=original_filename,
         file_path=str(dest),
         file_hash=file_hash,

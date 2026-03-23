@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
-from pypsa_app.backend.models import RunStatus
+from pypsa_app.backend.models import RunStatus, Visibility
 from pypsa_app.backend.schemas.auth import UserPublicResponse
 from pypsa_app.backend.schemas.backend import BackendPublicResponse
 from pypsa_app.backend.schemas.common import PaginationMeta
@@ -48,6 +48,7 @@ class RunCreate(BaseModel):
     cache: RunCache | None = None
     import_networks: list[str] | None = None
     backend_id: uuid.UUID | None = None
+    visibility: Visibility = Visibility.PRIVATE
     callback_url: HttpUrl | None = None
 
     @field_validator("callback_url")
@@ -74,6 +75,7 @@ class RunSummary(BaseModel):
     id: uuid.UUID = Field(validation_alias="job_id")
     status: RunStatus
     owner: UserPublicResponse
+    visibility: Visibility = Visibility.PRIVATE
     backend: BackendPublicResponse
     created_at: datetime
     started_at: datetime | None = None
@@ -93,7 +95,7 @@ class RunResponse(RunSummary):
     extra_files: dict[str, str] | None = None
     cache: RunCache | None = None
     import_networks: list[str] | None = None
-    callback_url: str | None = Field(None, validation_alias="callback_url")
+    callback_url: str | None = None
     exit_code: int | None = None
     networks: list[RunNetworkSummary] = []
 
@@ -120,3 +122,11 @@ class RunListMeta(PaginationMeta):
 class RunListResponse(BaseModel):
     data: list[RunSummary]
     meta: RunListMeta
+
+
+class RunUpdate(BaseModel):
+    visibility: Visibility | None = None
+
+
+class RunAdminUpdate(RunUpdate):
+    user_id: uuid.UUID | None = None

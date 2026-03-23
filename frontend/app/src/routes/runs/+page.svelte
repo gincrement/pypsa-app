@@ -7,7 +7,7 @@
 	import { formatRelativeTime, saveTablePref, buildOwnerOptions } from '$lib/utils.js';
 	import { restoreTableState, buildTableURL, filtersToAPI, clampPage } from '$lib/table-url-state.js';
 	import { RUN_FINAL_STATUSES } from '$lib/types.js';
-	import type { RunSummary, User, BackendPublic, ApiError } from '$lib/types.js';
+	import type { RunSummary, User, BackendPublic, ApiError, Visibility } from '$lib/types.js';
 	import type { FilterState, FilterCategory } from '$lib/components/ui/filter-dialog';
 	import type { SortingState, VisibilityState } from '@tanstack/table-core';
 	import FilterBar from '$lib/components/FilterBar.svelte';
@@ -26,6 +26,7 @@
 	let totalRuns = $state(0);
 	let cancellingId = $state<string | null>(null);
 	let removingId = $state<string | null>(null);
+	let updatingVisibilityId = $state<string | null>(null);
 
 	const FILTER_KEYS = ['statuses', 'workflows', 'owners', 'git_refs', 'configfiles', 'backends'] as const;
 	let filters = $state({ statuses: new Set<string>(), workflows: new Set<string>(), owners: new Set<string>(), git_refs: new Set<string>(), configfiles: new Set<string>(), backends: new Set<string>() });
@@ -91,6 +92,12 @@
 		{ key: 'backends', label: 'Backend', options: availableBackends.map(b => ({ id: b.id, label: b.name })) },
 	]);
 
+	function canEditRun(run: RunSummary): boolean {
+		if (!authStore.user) return false;
+		if (authStore.user.permissions?.includes('runs:manage_all')) return true;
+		return run.owner?.id === authStore.user.id;
+	}
+
 	const columns = $derived.by(() => {
 		const authEnabled = authStore.authEnabled ?? false;
 		return createColumns({
@@ -98,9 +105,12 @@
 			handleCancel,
 			handleRemove,
 			handleRerun,
+			handleVisibilityToggle,
+			canEditRun,
 			authEnabled,
 			getCancellingId: () => cancellingId,
 			getRemovingId: () => removingId,
+			getUpdatingVisibilityId: () => updatingVisibilityId,
 			getTick: () => tick
 		});
 	});
@@ -203,6 +213,19 @@
 			goto(`/runs/${newRun.id}`);
 		} catch (err) {
 			if (!(err as ApiError).cancelled) toast.error((err as Error).message);
+		}
+	}
+
+	async function handleVisibilityToggle(runId: string, visibility: Visibility) {
+		if (updatingVisibilityId) return;
+		updatingVisibilityId = runId;
+		try {
+			await runs.updateVisibility(runId, visibility);
+			await loadRuns(true);
+		} catch (err) {
+			if (!(err as ApiError).cancelled) toast.error((err as Error).message);
+		} finally {
+			updatingVisibilityId = null;
 		}
 	}
 

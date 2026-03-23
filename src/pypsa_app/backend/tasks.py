@@ -114,7 +114,12 @@ def import_run_outputs_task(self: Any, job_id: str) -> None:  # noqa: PLR0915
                 sd_client.download_job_output_to_file(job_id, output_path, tmp)
                 filename = PurePosixPath(output_path).name
                 network = import_network_file(
-                    tmp, filename, run.user_id, db, source_run_id=run.job_id
+                    tmp,
+                    filename,
+                    run.user_id,
+                    db,
+                    source_run_id=run.job_id,
+                    visibility=run.visibility,
                 )
                 logger.info(
                     "Imported network from run output",
