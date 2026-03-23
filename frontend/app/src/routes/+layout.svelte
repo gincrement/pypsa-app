@@ -101,7 +101,7 @@
 <ModeWatcher />
 <Toaster position="bottom-right" closeButton richColors duration={8000} />
 
-<div class="flex min-h-svh flex-col" style="--banner-height: {bannerDismissed ? 0 : bannerHeight}px">
+<div class="flex h-svh flex-col overflow-hidden" style="--banner-height: {bannerDismissed ? 0 : bannerHeight}px">
 	{#if !bannerDismissed && showSidebar}
 		<div class="flex w-full items-center justify-center gap-2 bg-primary px-4 py-1.5 text-center text-sm font-medium text-primary-foreground"
 			bind:clientHeight={bannerHeight}>
@@ -123,7 +123,7 @@
 	{:else if showSidebar}
 		<Sidebar.Provider bind:open={sidebarStore.open} class="flex-1">
 			<AppSidebar />
-			<Sidebar.Inset>
+			<Sidebar.Inset class="overflow-auto">
 				<header class="flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background px-4 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
 					<div class="flex items-center gap-2">
 						<Sidebar.Trigger />
