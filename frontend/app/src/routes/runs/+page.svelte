@@ -11,6 +11,7 @@
 	import type { FilterState, FilterCategory } from '$lib/components/ui/filter-dialog';
 	import type { SortingState, VisibilityState } from '@tanstack/table-core';
 	import FilterBar from '$lib/components/FilterBar.svelte';
+	import StatusBadge from './cells/StatusBadge.svelte';
 	import { Play } from 'lucide-svelte';
 	import { toast } from 'svelte-sonner';
 	import PaginatedTable from '$lib/components/PaginatedTable.svelte';
@@ -233,7 +234,15 @@
 				{columnVisibility}
 				onFilterChange={handleFilterChange}
 				onColumnVisibilityChange={handleColumnVisibilityChange}
-			/>
+			>
+				{#snippet renderOption({ category, option })}
+					{#if category.key === 'statuses'}
+						<StatusBadge status={option.id} />
+					{:else}
+						<span class="truncate">{option.label}</span>
+					{/if}
+				{/snippet}
+			</FilterBar>
 		{/if}
 
 		<!-- Content based on view state -->

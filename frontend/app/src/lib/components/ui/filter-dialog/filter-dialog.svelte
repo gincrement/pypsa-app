@@ -1,23 +1,26 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import { Filter, Search } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
 	import * as Avatar from '$lib/components/ui/avatar';
 	import { Checkbox } from '$lib/components/ui/checkbox';
-	import type { FilterCategory, FilterState } from './index.js';
+	import type { FilterCategory, FilterOption, FilterState } from './index.js';
 
 	interface FilterDialogProps {
 		categories: FilterCategory[];
 		filters: FilterState;
 		onFilterChange: (filters: FilterState) => void;
 		title?: string;
+		renderOption?: Snippet<[{ category: FilterCategory; option: FilterOption }]>;
 	}
 
 	let {
 		categories,
 		filters,
 		onFilterChange,
-		title = 'Filters'
+		title = 'Filters',
+		renderOption
 	}: FilterDialogProps = $props();
 
 	const visibleCategories = $derived(
@@ -160,13 +163,17 @@
 										checked={isChecked}
 										onCheckedChange={(checked: boolean) => toggleDraftFilter(catKey, option.id, checked)}
 									/>
-									{#if option.avatarUrl}
-										<Avatar.Root class="h-5 w-5">
-											<Avatar.Image src={option.avatarUrl} alt={option.label} />
-											<Avatar.Fallback class="text-[10px]">{option.label.slice(0, 2).toUpperCase()}</Avatar.Fallback>
-										</Avatar.Root>
+									{#if renderOption && activeCategory}
+										{@render renderOption({ category: activeCategory, option })}
+									{:else}
+										{#if option.avatarUrl}
+											<Avatar.Root class="h-5 w-5">
+												<Avatar.Image src={option.avatarUrl} alt={option.label} />
+												<Avatar.Fallback class="text-[10px]">{option.label.slice(0, 2).toUpperCase()}</Avatar.Fallback>
+											</Avatar.Root>
+										{/if}
+										<span class="truncate">{option.label}</span>
 									{/if}
-									<span class="truncate">{option.label}</span>
 								</label>
 							{/each}
 							{#if filteredOptions.length === 0}

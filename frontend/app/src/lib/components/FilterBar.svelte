@@ -3,8 +3,9 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Button } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import type { Snippet } from 'svelte';
 	import { FilterDialog } from '$lib/components/ui/filter-dialog';
-	import type { FilterState, FilterCategory } from '$lib/components/ui/filter-dialog';
+	import type { FilterState, FilterCategory, FilterOption } from '$lib/components/ui/filter-dialog';
 	import type { VisibilityState } from '@tanstack/table-core';
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -19,6 +20,7 @@
 		columns?: ColumnWithAccessor[];
 		columnVisibility?: VisibilityState;
 		onColumnVisibilityChange?: (visibility: VisibilityState) => void;
+		renderOption?: Snippet<[{ category: FilterCategory; option: FilterOption }]>;
 	}
 
 	let {
@@ -29,7 +31,8 @@
 		onSearchChange,
 		columns = [],
 		columnVisibility = {},
-		onColumnVisibilityChange
+		onColumnVisibilityChange,
+		renderOption
 	}: FilterBarProps = $props();
 
 	function handleSearchInput(e: Event) {
@@ -54,6 +57,7 @@
 		categories={filterCategories}
 		{filters}
 		onFilterChange={(newFilters: FilterState) => onFilterChange?.(newFilters)}
+		{renderOption}
 	/>
 
 	<!-- Search (optional) -->
